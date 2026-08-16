@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CigLog - Cigarette Logger</title>
+    <meta name="theme-color" content="#262626">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="CigLog">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,0&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <!-- Fixed Header -->
+    <header class="fixed-header">
+        <div class="header-content">
+            <div class="title-section">
+                <h1>CigLog<span class="title-dot">.</span></h1>
+                <p id="lastSmokedTimer" class="tagline timer-label" aria-label="Tap for exact duration">Loading...</p>
+                <div id="timerPopover" class="timer-popover" style="display:none;"></div>
+            </div>
+            <button id="menuToggle" class="menu-btn" aria-label="Open menu"><span class="ms ms-menu">menu</span></button>
+        </div>
+        <!-- Table Header -->
+        <div class="table-header">
+            <div class="header-cell" data-tooltip="Date"><span class="ms">calendar_month</span></div>
+            <div class="header-cell" data-tooltip="Cravings"><span class="ms">sentiment_frustrated</span></div>
+            <div class="header-cell" data-tooltip="Cigarettes Smoked"><span class="ms">smoking_rooms</span></div>
+            <div class="header-cell" data-tooltip="Money Spent"><span class="ms">payments</span></div>
+            <div class="header-cell" data-tooltip="~ Minutes of Life Lost"><span class="ms">history</span></div>
+            <div class="header-cell" data-tooltip="Info"><span class="ms">info</span></div>
+            <div class="header-cell" data-tooltip="Edit Day"><span class="ms">edit_document</span></div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div id="entriesTable" class="entries-table">
+            <div class="empty-state"><p>Loading your journey...</p></div>
+        </div>
+    </main>
+
+    <!-- Analytics View -->
+    <div id="analyticsView" class="analytics-view" style="display:none;">
+        <div class="analytics-header">
+            <button id="backToTableBtn" class="back-btn" aria-label="Back to table">
+                <span class="ms">arrow_back</span>
+            </button>
+            <h2><span class="ms">analytics</span> Analytics</h2>
+        </div>
+        <div class="analytics-content" id="analyticsContent">
+            <!-- Populated by _renderAnalytics() -->
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="settingsTitle"><span class="ms">wand_shine</span> Welcome to CigLog</h2>
+                <button class="close-btn close-settings" id="closeSettings" style="display:none;"><span class="ms">close</span></button>
+            </div>
+            <div class="modal-body settings-body">
+                <div class="settings-rows">
+                    <!-- Currency -->
+                    <div class="form-group">
+                        <label for="currency">Currency:</label>
+                        <select id="currency" class="time-select">
+                            <option value="₹">INR (₹)</option>
+                            <option value="$">USD ($)</option>
+                            <option value="€">EUR (€)</option>
+                            <option value="£">GBP (£)</option>
+                            <option value="¥">JPY (¥)</option>
+                            <option value="₽">RUB (₽)</option>
+                            <option value="R$">BRL (R$)</option>
+                            <option value="A$">AUD (A$)</option>
+                            <option value="C$">CAD (C$)</option>
+                            <option value="CHF">CHF (CHF)</option>
+                            <option value="元">CNY (元)</option>
+                        </select>
+                    </div>
+
+                    <!-- Price per cigarette -->
+                    <div class="form-group">
+                        <label for="cigarettePrice">Price / Smoke:</label>
+                        <div class="currency-input">
+                            <span id="currencySymbol" class="currency-symbol">₹</span>
+                            <input type="number" id="cigarettePrice" min="0.1" step="0.1" value="25">
+                        </div>
+                    </div>
+
+                    <!-- Daily limit -->
+                    <div class="form-group" id="dailyLimitGroup">
+                        <div class="daily-limit-label-row">
+                            <input type="checkbox" id="dailyLimitEnabled">
+                            <label for="dailyLimitEnabled">Daily Smoke Limit:</label>
+                        </div>
+                        <input type="number" id="dailyLimitValue" min="0" max="99" value="" disabled>
+                        </p>
+                    </div>
+
+                    <!-- Time zone -->
+                    <div class="form-group">
+                        <label for="timezone">Time zone:</label>
+                        <select id="timezone" class="time-select"></select>
+                    </div>
+                </div>
+
+                <!-- Custom Triggers — shown only after setup -->
+                <div id="customTriggerGroup" class="form-group" style="display:none;">
+                    <button class="trigger-toggle-btn" id="customTriggerToggle" style="max-width:300px;">
+                        <span class="ms ms-fill">bolt</span> Add Custom Triggers
+                    </button>
+                    <div id="customTriggerSection" class="trigger-section" style="max-width:300px;">
+                        <div class="custom-trigger-input-row">
+                            <span class="ms">label</span>
+                            <input type="text" id="customTrigger0" maxlength="20" placeholder="Custom trigger name...">
+                        </div>
+                        <div class="custom-trigger-input-row">
+                            <span class="ms">label</span>
+                            <input type="text" id="customTrigger1" maxlength="20" placeholder="Custom trigger name...">
+                        </div>
+                        <div class="custom-trigger-input-row">
+                            <span class="ms">label</span>
+                            <input type="text" id="customTrigger2" maxlength="20" placeholder="Custom trigger name...">
+                        </div>
+                        <p class="help-text" style="margin-top:6px;">Up to 3 custom triggers</p>
+                    </div>
+                </div>
+                <!-- Export/Import — shown only after setup -->
+                <div id="exportImportGroup" class="form-group" style="display:none;">
+                    <div class="settings-export-import-row">
+                        <button id="exportSettingsBtn" class="btn btn-secondary"><span class="ms">file_export</span> Export Log</button>
+                        <button id="importSettingsBtn" class="btn btn-secondary"><span class="ms">file_open</span> Load Log</button>
+                    </div>
+                    <input type="file" id="csvFileSettings" accept=".csv" style="display:none;">
+                </div>
+                <div class="form-actions">
+                    <button id="saveSettings" class="btn btn-primary"><span class="ms">play_arrow</span> Start Tracking</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Today Modal -->
+    <div id="createTodayModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="createTodayTitle"></h2>
+            </div>
+            <div class="modal-body" style="text-align:center;">
+                <p>CigLog is a cigarettes craved and smoked logger that helps you log your daily smoking habits.</p>
+                <ul style="text-align:left;margin:12px auto;max-width:280px;color:var(--text-secondary);font-size:0.9rem;list-style:none;padding:0;">
+                    <li style="margin-bottom:6px;"><span class="ms" style="width:20px;">draft</span> Start Fresh and a new zero-day entry will be created today</li>
+                    <li><span class="ms" style="width:20px;">file_open</span> Load from a previous file</li>
+                </ul>
+                <p class="help-text">All data is stored locally.</p>
+                <div class="form-actions" style="flex-direction:column;align-items:center;">
+                    <button id="createTodayYes" class="btn btn-primary" style="width:100%;max-width:280px;"><span class="ms">draft</span> Start Fresh Log</button>
+                    <button id="createTodayLoad" class="btn btn-secondary" style="width:100%;max-width:280px;"><span class="ms">file_open</span> Load from File</button>
+                </div>
+                <input type="file" id="csvFileFirstRun" accept=".csv" style="display:none;">
+            </div>
+        </div>
+    </div>
+
+    <!-- Daily Limit Modal -->
+    <div id="dailyLimitModal" class="modal">
+        <div class="modal-content actions-modal">
+            <div class="modal-header">
+                <h2><span class="ms">flag</span> Set a Daily Limit?</h2>
+            </div>
+            <div class="modal-body" style="padding:20px;text-align:center;">
+                <p style="margin-bottom:16px;color:var(--text-primary);">Set a daily cigarette limit to track how often you stay within your goal.</p>
+                <div style="display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:16px;">
+                    <input type="number" id="onboardingLimitValue" min="0" max="99" value=""
+                        style="width:70px;text-align:center;padding:10px;background:var(--bg-secondary);
+                        border:1px solid rgba(217,217,217,0.25);border-radius:8px;color:var(--text-primary);
+                        font-family:inherit;font-size:1.1rem;" disabled>
+                </div>
+                <p class="help-text" style="margin-bottom:24px;">Can be changed anytime in <span class="ms" style="font-size:1rem;">settings</span> Settings</p>
+                <div style="display:flex;gap:12px;justify-content:center;">
+                    <button id="dailyLimitSkip" class="btn btn-ghost" style="flex:1;">Skip</button>
+                    <button id="dailyLimitSet" class="btn btn-primary" style="flex:1;">Set Limit</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Craving Modal -->
+    <div id="addCravingModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="cravingTitle"></h2>
+                <button class="close-btn close-craving"><span class="ms">close</span></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Time:</label>
+                    <div id="smartTimeDefaults" class="smart-time-defaults"></div>
+                    <div class="custom-time-input">
+                        <span>Custom Time:</span>
+                        <div class="time-input-group">
+                            <input type="text" inputmode="numeric" id="cravingHH" maxlength="2" placeholder="HH">
+                            <span>:</span>
+                            <input type="text" inputmode="numeric" id="cravingMM" maxlength="2" placeholder="MM">
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Craving Intensity:</label>
+                    <div class="intensity-selector">
+                        <button class="intensity-btn low" data-intensity="low">
+                            <span class="ms ms-fill" style="color:var(--low-intensity);">circle</span>
+                            <span class="intensity-label">Low</span>
+                        </button>
+                        <button class="intensity-btn medium" data-intensity="medium">
+                            <span class="ms ms-fill" style="color:var(--medium-intensity);">circle</span>
+                            <span class="intensity-label">Mid</span>
+                        </button>
+                        <button class="intensity-btn high" data-intensity="high">
+                            <span class="ms ms-fill" style="color:var(--high-intensity);">circle</span>
+                            <span class="intensity-label">High</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <button class="trigger-toggle-btn" id="cravingTriggerToggle">
+                        <span class="ms ms-fill">bolt</span> Add Trigger
+                    </button>
+                </div>
+                <div class="form-actions">
+                    <button id="saveCraving" class="btn btn-primary" disabled>Save Craving</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Smoke Modal -->
+    <div id="addSmokeModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="smokeTitle"></h2>
+                <button class="close-btn close-smoke"><span class="ms">close</span></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Time:</label>
+                    <div id="smokeTimeDefaults" class="smart-time-defaults"></div>
+                    <div class="custom-time-input">
+                        <span>Custom Time:</span>
+                        <div class="time-input-group">
+                            <input type="text" inputmode="numeric" id="smokeHH" maxlength="2" placeholder="HH">
+                            <span>:</span>
+                            <input type="text" inputmode="numeric" id="smokeMM" maxlength="2" placeholder="MM">
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Cigarettes Smoked:</label>
+                    <input type="number" id="cigaretteCount" min="1" step="1" value="1" style="width:80px;text-align:center;padding:10px;background:var(--bg-secondary);border:1px solid rgba(217,217,217,0.25);border-radius:8px;color:var(--text-primary);font-family:inherit;font-size:1.1rem;">
+                </div>
+                <div class="form-group">
+                    <button class="trigger-toggle-btn" id="smokeCopyTriggerBtn" style="display:none;">
+                        <span class="ms ms-fill">bolt</span> Copy triggers from last craving
+                    </button>
+                </div>
+                <div class="form-group">
+                    <button class="trigger-toggle-btn" id="smokeTriggerToggle">
+                        <span class="ms ms-fill">bolt</span> Add Trigger
+                    </button>
+                </div>
+                <div class="form-actions">
+                    <button id="saveSmoke" class="btn btn-primary" disabled>Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+        <!-- Smart Logging Modal -->
+        <div id="smartModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="smartTitle"></h2>
+                    <button class="close-btn close-smart"><span class="ms">close</span></button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Time:</label>
+                        <div id="smartTimeDefaults" class="smart-time-defaults"></div>
+                        <div class="custom-time-input">
+                            <span>Custom Time:</span>
+                            <div class="time-input-group">
+                                <input type="text" inputmode="numeric" id="smartHH" maxlength="2" placeholder="HH">
+                                <span>:</span>
+                                <input type="text" inputmode="numeric" id="smartMM" maxlength="2" placeholder="MM">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Craving Intensity:</label>
+                        <div class="intensity-selector" id="smartIntensitySelector">
+                            <button class="intensity-btn low" data-intensity="low">
+                                <span class="ms ms-fill" style="color:var(--low-intensity);">circle</span>
+                                <span class="intensity-label">Low</span>
+                            </button>
+                            <button class="intensity-btn medium" data-intensity="medium">
+                                <span class="ms ms-fill" style="color:var(--medium-intensity);">circle</span>
+                                <span class="intensity-label">Mid</span>
+                            </button>
+                            <button class="intensity-btn high" data-intensity="high">
+                                <span class="ms ms-fill" style="color:var(--high-intensity);">circle</span>
+                                <span class="intensity-label">High</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Cigarettes Smoked:</label>
+                        <input type="number" id="smartCount" min="1" step="1" value="1" style="width:80px;text-align:center;padding:10px;background:var(--bg-secondary);border:1px solid rgba(217,217,217,0.25);border-radius:8px;color:var(--text-primary);font-family:inherit;font-size:1.1rem;">
+                    </div>
+                    <div class="form-group">
+                        <button class="trigger-toggle-btn" id="smartCopyTriggerBtn" style="display:none;">
+                            <span class="ms ms-fill">bolt</span> Copy triggers from last craving
+                        </button>
+                    </div>
+                    <div class="form-group">
+                        <button class="trigger-toggle-btn" id="smartTriggerToggle">
+                            <span class="ms ms-fill">bolt</span> Add Trigger
+                        </button>
+                    </div>
+                    <div class="form-actions">
+                        <button id="saveSmart" class="btn btn-primary" disabled>Save Craving + Smoke</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    <!-- Info/Timeline Modal -->
+    <div id="infoModal" class="modal">
+        <div class="modal-content info-modal">
+            <div class="modal-header">
+                <h2 id="infoTitle"></h2>
+                <button class="close-btn close-info"><span class="ms">close</span></button>
+            </div>
+            <div class="modal-body">
+                <h3 class="timeline-heading"><span class="ms">view_timeline</span> Timeline</h3>
+                <div id="timelineContent" class="timeline-content"></div>
+                <div class="notes-section">
+                    <h3><span class="ms">chat</span> Notes</h3>
+                    <textarea id="dayNotes" rows="3" placeholder="Add notes about your day, triggers, feelings..."></textarea>
+                    <button id="saveNotes" class="btn btn-primary">Save Notes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Day Modal -->
+    <div id="editDayModal" class="modal">
+        <div class="modal-content edit-modal">
+            <div class="modal-header">
+                <h2 id="editDayTitle"></h2>
+                <button class="close-btn close-edit"><span class="ms">close</span></button>
+            </div>
+            <div class="modal-body">
+                <div class="edit-section">
+                    <h3><span class="ms">sentiment_frustrated</span> Cravings:</h3>
+                    <div id="cravingsList" class="edit-list"></div>
+                    <div class="edit-actions">
+                        <button id="addCravingEdit" class="btn btn-secondary">Add</button>
+                        <button id="deleteSelectedCravings" class="btn btn-danger" disabled>Delete</button>
+                    </div>
+                </div>
+                <div class="edit-section">
+                    <h3><span class="ms">smoking_rooms</span> Smoked:</h3>
+                    <div id="smokedList" class="edit-list"></div>
+                    <div class="edit-actions">
+                        <button id="addSmokeEdit" class="btn btn-secondary">Add</button>
+                        <button id="deleteSelectedSmoked" class="btn btn-danger" disabled>Delete</button>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button id="cancelEditDay" class="btn btn-ghost">Cancel</button>
+                    <button id="saveEditDay" class="btn btn-primary">Save Changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Side Menu -->
+    <div id="sideMenu" class="side-menu">
+        <div class="menu-header">
+            <h3>Menu</h3>
+            <button id="closeMenu" class="close-btn"><span class="ms">close</span></button>
+        </div>
+        <div class="menu-items">
+            <button id="chartBtn" class="menu-item">
+                <span class="menu-icon"><span class="ms">chart_data</span></span>
+                <span>Charts</span>
+            </button>
+            <button id="analyticsBtn" class="menu-item">
+                <span class="menu-icon"><span class="ms">analytics</span></span>
+                <span>Analytics</span>
+            </button>
+            <button id="settingsMenuBtn" class="menu-item">
+                <span class="menu-icon"><span class="ms">settings</span></span>
+                <span>Settings</span>
+            </button>
+            <button id="aboutBtn" class="menu-item">
+                <span class="menu-icon"><span class="ms">help</span></span>
+                <span>About</span>
+            </button>
+            <button id="readmeBtn" class="menu-item">
+                <span class="menu-icon"><span class="ms">description</span></span>
+                <span>Read Me</span>
+            </button>
+            <button id="changelogBtn" class="menu-item">
+                <span class="menu-icon"><span class="ms">list_alt</span></span>
+                <span>Changelog</span>
+            </button>
+            <button id="roadmapBtn" class="menu-item">
+                <span class="menu-icon"><span class="ms">route</span></span>
+                <span>Roadmap</span>
+            </button>
+            <button id="resetBtn" class="menu-item reset-menu-item">
+                <span class="menu-icon"><span class="ms">replay</span></span>
+                <span>Reset All Data</span>
+            </button>
+        </div>
+    </div>
+    <div id="menuOverlay" class="menu-overlay"></div>
+
+    <!-- Chart Modal -->
+    <div id="chartModal" class="modal">
+        <div class="modal-content chart-modal">
+            <div class="modal-header">
+                <h2><span class="ms">chart_data</span> Charts</h2>
+                <button class="close-btn close-chart"><span class="ms">close</span></button>
+            </div>
+            <div class="modal-body chart-body">
+                <select id="timeRange" class="time-select" style="display:block;margin:0 auto 0;">
+                    <option value="7">Past 1 Week</option>
+                    <option value="30">Past 1 Month</option>
+                    <option value="90">Past 3 Months</option>
+                    <option value="180">Past 6 Months</option>
+                    <option value="365">Past 1 Year</option>
+                    <option value="730">Past 2 Years</option>
+                    <option value="1825">Past 5 Years</option>
+                </select>
+                <div class="chart-stats">
+                    <div class="stat-item">
+                        <span class="stat-label">Smoked</span>
+                        <span id="totalSmoked" class="stat-value">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Craved</span>
+                        <span id="totalCravings" class="stat-value">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Money Spent</span>
+                        <span id="moneySpent" class="stat-value">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Life Lost</span>
+                        <span id="lifeLost" class="stat-value">0m</span>
+                    </div>
+                </div>
+                <div class="chart-container" id="chartPanelMain"><canvas id="chartMain"></canvas></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- About Modal -->
+    <div id="aboutModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><span class="ms">help</span> About CigLog</h2>
+                <button class="close-btn close-about"><span class="ms">close</span></button>
+            </div>
+            <div class="modal-body about-body">
+                <h3><span class="ms">deployed_code</span> Code</h3>
+                <p>
+                    Version: <code>1.4.0</code><br>
+                    Build date: <code>16-08-2026</code><br>
+                    Service worker cache: <code>ciglog-v27</code><br>
+                    Storage schema: <code>ciglog_v1</code>
+                </p>                    
+                <h3><span class="ms">spoke</span> Dependencies</h3>
+                <p>
+                    Chart.js: <span id="chartVersion">loading...</span><br>
+                    Material Symbols: Google Fonts (Rounded)<br>
+                    Roboto Mono: Google Fonts
+                </p>
+                <h3><span class="ms">computer</span> Runtime</h3>
+                <p>
+                    User agent: <span id="userAgent"></span><br>
+                    LocalStorage: <span id="storageStatus">available</span><br>
+                    Service worker: <span id="swStatus">checking...</span>
+                </p>
+    
+                <div class="version"><a href="https://github.com/fuzzykaiju/ciglog" target="_blank" rel="noopener" style="color:var(--text-primary);">GitHub</a> · MIT License</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- README Modal -->
+    <div id="readmeModal" class="modal">
+        <div class="modal-content readme-modal">
+            <div class="modal-header">
+                <h2><span class="ms">description</span> Read Me</h2>
+                <button class="close-btn close-readme"><span class="ms">close</span></button>
+            </div>
+            <div class="modal-body readme-body" id="readmeBody">
+                <!-- Content rendered by JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Changelog Modal -->
+    <div id="changelogModal" class="modal">
+        <div class="modal-content readme-modal">
+            <div class="modal-header">
+                <h2><span class="ms">list_alt</span> Changelog</h2>
+                <button class="close-btn close-changelog"><span class="ms">close</span></button>
+            </div>
+            <div class="modal-body readme-body" id="changelogBody">
+            </div>
+        </div>
+    </div>
+
+    <!-- Roadmap Modal -->
+    <div id="roadmapModal" class="modal">
+        <div class="modal-content readme-modal">
+            <div class="modal-header">
+                <h2><span class="ms">route</span> Roadmap</h2>
+                <button class="close-btn close-roadmap"><span class="ms">close</span></button>
+            </div>
+            <div class="modal-body readme-body" id="roadmapBody">
+            </div>
+        </div>
+    </div>
+
+        <!-- Skipped Day Modal -->
+    <div id="skippedDayModal" class="modal">
+        <div class="modal-content actions-modal">
+            <div class="modal-header">
+                <h2><span class="ms">warning</span> No Data Logged</h2>
+            </div>
+            <div class="modal-body" style="padding:20px;text-align:center;">
+                <p id="skippedDayMessage" style="margin-bottom:24px;color:var(--text-primary);"></p>
+                <div class="skipped-btn-row">
+                    <button id="skippedAddEntries" class="btn btn-primary">Add Entries</button>
+                    <button id="skippedMarkClean" class="btn btn-clean">Mark as Clean Day</button>
+                    <button id="skippedDismiss" class="btn btn-ghost">Dismiss</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Trigger Modal -->
+    <div id="editTriggerModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Edit Triggers</h2>
+                <button class="close-btn close-edit-trigger"><span class="ms">close</span></button>
+            </div>
+            <div class="modal-body">
+                <div id="editTriggerChipGrid"></div>
+                <div class="form-actions">
+                    <button id="cancelEditTrigger" class="btn btn-ghost">Cancel</button>
+                    <button id="confirmEditTrigger" class="btn btn-primary">Confirm</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toastNotification" class="toast" style="display:none;"></div>
+
+    <!-- Confirm Modal -->
+    <div id="confirmModal" class="modal">
+        <div class="modal-content actions-modal">
+            <div class="modal-header">
+                <h2 id="confirmTitle">Confirm</h2>
+            </div>
+            <div class="modal-body" style="padding:20px;text-align:center;">
+                <p id="confirmMessage" style="margin-bottom:24px;color:var(--text-primary);"></p>
+                <div style="display:flex;gap:12px;justify-content:center;">
+                    <button id="confirmCancel" class="btn btn-ghost" style="flex:1;">Cancel</button>
+                    <button id="confirmOk" class="btn btn-danger" style="flex:1;">Confirm</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reset Modal -->
+    <div id="resetModal" class="modal">
+        <div class="modal-content actions-modal">
+            <div class="modal-header">
+                <h2><span class="ms">emergency_home</span> Reset All Data</h2>
+                <button class="close-btn close-reset"><span class="ms">close</span></button>
+            </div>
+            <div class="modal-body" style="padding:20px;text-align:center;">
+                <p style="margin-bottom:12px;color:var(--text-primary);">This will permanently delete <strong>all entries and settings</strong>.</p>
+                <p style="margin-bottom:24px;color:var(--text-secondary);font-size:0.9rem;">This action cannot be undone.</p>
+                <div style="display:flex;gap:12px;justify-content:center;">
+                    <button id="cancelReset" class="btn btn-ghost" style="flex:1;">Cancel</button>
+                    <button id="confirmReset" class="btn btn-danger" style="flex:1;"><span class="ms">replay</span> Reset</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('./sw.js').catch(err => {
+            console.warn('SW registration failed:', err);
+          });
+        });
+      }
+    </script>
+</body>
+</html>
