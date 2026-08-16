@@ -132,7 +132,7 @@ class CigLogTracker {
 
         // Smart modal
         this.smartTitle = $('smartTitle');
-        this.smartTimeDefaults = $('smartTimeDefaults');
+        this.smartLogTimeDefaults = $('smartLogTimeDefaults');
         this.smartHH = $('smartHH');
         this.smartMM = $('smartMM');
         this.smartCount = $('smartCount');
@@ -963,10 +963,11 @@ class CigLogTracker {
         const help = document.createElement('div');
         help.className = 'help-row';
         help.innerHTML = `
-            <p>• Tap <span class="ms">sentiment_frustrated</span> or <span class="ms">smoking_rooms</span> in a row to log a craving or cigarette</p>
-            <p>• Long press <span class="ms">smoking_rooms</span> to log a craving & smoke together</p>
-            <p>• Tap <span class="ms">keyboard_arrow_down</span> to view the day's timeline &amp; notes</p>
-            <p>• Tap <span class="ms">more_vert</span> to edit or delete entries</p>
+            <p>• Tap <span class="ms">sentiment_frustrated</span> to log a craving</p>
+            <p>• Tap <span class="ms">smoking_rooms</span> to log a smoke</p>
+            <p>• Long press <span class="ms">smoking_rooms</span> to log both</p>
+            <p>• Tap <span class="ms">keyboard_arrow_down</span> to view timeline</p>
+            <p>• Tap <span class="ms">more_vert</span> to edit entries</p>
             <p>• Tap <span class="ms">warning</span> on skipped days for more actions</p>`;
         this.entriesTable.appendChild(help);
 
@@ -1039,7 +1040,7 @@ class CigLogTracker {
 
     _openAddCraving(date) {
         this.activeDate = date;
-        this.cravingTitle.innerHTML = `Add Craving<br><span class="modal-subtitle">${date}</span>`;
+        this.cravingTitle.innerHTML = `Log Craving<br><span class="modal-subtitle">${date}</span>`;
         document.querySelectorAll('.intensity-btn, .time-btn').forEach(b => b.classList.remove('selected'));
         this.cravingHH.value = '';
         this.cravingMM.value = '';
@@ -1079,7 +1080,7 @@ class CigLogTracker {
 
     _openAddSmoke(date) {
         this.activeDate = date;
-        this.smokeTitle.innerHTML = `Log Cigarette<br><span class="modal-subtitle">${date}</span>`;
+        this.smokeTitle.innerHTML = `Log Smoke<br><span class="modal-subtitle">${date}</span>`;
         document.querySelectorAll('.time-btn').forEach(b => b.classList.remove('selected'));
         this.smokeHH.value = '';
         this.smokeMM.value = '';
@@ -1127,7 +1128,7 @@ class CigLogTracker {
 
     _openSmartModal(date) {
         this.activeDate = date;
-        this.smartTitle.innerHTML = `Smart Log: Craving + Smoke<br><span class="modal-subtitle">${date}</span>`;
+        this.smartTitle.innerHTML = `Log Both<br><span class="modal-subtitle">${date}</span>`;
         // Reset form
         document.querySelectorAll('#smartIntensitySelector .intensity-btn, .time-btn').forEach(b => b.classList.remove('selected'));
         this.smartHH.value = '';
@@ -1162,10 +1163,10 @@ class CigLogTracker {
 
         // Time presets
         if (date === this._today()) {
-            this._buildTimePresets(this.smartTimeDefaults, this.smartHH, this.smartMM,
+            this._buildTimePresets(this.smartLogTimeDefaults, this.smartHH, this.smartMM,
                 () => this._updateSmartSaveBtn());
         } else {
-            this.smartTimeDefaults.innerHTML = '<p style="grid-column:1/-1;text-align:center;">Enter time manually for past dates</p>';
+            this.smartLogTimeDefaults.innerHTML = '<p style="grid-column:1/-1;text-align:center;">Enter time manually for past dates</p>';
         }
 
         this._openModal('smart');
