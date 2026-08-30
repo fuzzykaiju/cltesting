@@ -2791,6 +2791,35 @@ class CigLogTracker {
         }, null);
     }
 
+    
+    // Sparse axis-label logic shared by every AAG line/bar chart. Given the
+    // full labels array (dd-mm-yy strings) and a tick's index, decides what
+    // text (if any) that tick shows, scaled by how many points are in view:
+    // week/fortnight → every day, single letter; month → date number on the
+    // first day of each week; 3mo+ → month name on the first day of each month.
+    // Returns '' for ticks that should stay blank, which Chart.js renders as
+    // present-but-invisible rather than collapsing/reflowing the axis.
+    _aagAxisTickInfo(labels, index) {
+        const raw = labels[index];
+        const [dd, mm, yy] = raw.split('-').map(Number);
+        const date = new Date(2000 + yy, mm - 1, dd);
+        const dow = date.getDay(); // 0 = Sunday
+
+        let text = '';
+        if (labels.length <= 14) {
+            const dayLetters = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+            text = dayLetters[dow];
+        } else if (labels.length <= 31) {
+            if (dow === 1) text = String(dd); // Monday = start of week
+        } else {
+            if (dd === 1) {
+                const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                text = months[mm - 1];
+            }
+        }
+        return { text, isSunday: dow === 0 };
+    }
+
     // One data point per calendar day in [start, end] — full range including future
     // and pre-history days, so the axis always shows the whole week/month/etc.
     // Days that actually fall within the user's logging history are zero-filled
@@ -2817,8 +2846,12 @@ class CigLogTracker {
             const isFuture = cur > todayDt;
             const isBeforeFirst = !firstEntryDate || cur < firstEntryDate;
             const entry = byDate[dateStr];
+            // Same "unacknowledged skipped day" definition _renderTable() already uses —
+            // a skipped day has no real data, so it's a gap, not a plotted 0.
+            const isSkipped = entry && entry.skipped && !entry.clean &&
+                              !entry.cravings.length && !entry.smoked.length;
             labels.push(dateStr);
-            if (isFuture || isBeforeFirst) {
+            if (isFuture || isBeforeFirst || isSkipped) {
                 smoked.push(null);
                 craved.push(null);
             } else {
@@ -2873,11 +2906,16 @@ class CigLogTracker {
                 const cravingCount = entry
                     ? entry.cravings.filter(c => sourceTypes.includes(c.source || 'manual')).length
                     : 0;
-                if (cravingCount === 0) {
+                const smokedCount = entry ? entry.smoked.reduce((s, x) => s + x.count, 0) : 0;
+                // A day only gets a bar if the craving data can actually be
+                // trusted: zero qualifying cravings (0/0, undefined) OR more
+                // smokes than logged cravings (data incomplete — some smokes
+                // happened with no craving tracked at all) both produce a gap,
+                // same as future/pre-history days, rather than a misleading 0%.
+                if (cravingCount === 0 || smokedCount > cravingCount) {
                     rates.push(null);
                 } else {
-                    const smokedCount = entry.smoked.reduce((s, x) => s + x.count, 0);
-                    const resisted = Math.max(0, cravingCount - smokedCount);
+                    const resisted = cravingCount - smokedCount;
                     rates.push(Math.round((resisted / cravingCount) * 100));
                 }
             }
@@ -2980,8 +3018,14 @@ class CigLogTracker {
                 scales: {
                     x: {
                         grid: { display: false },
-                        ticks: { display: false },
                         border: { display: false },
+                        ticks: {
+                            autoSkip: false,
+                            maxRotation: 0,
+                            font: { family: st.font, size: 10 },
+                            color: (ctx) => this._aagAxisTickInfo(labels, ctx.index).isSunday ? st.textPrimary : st.textSecond,
+                            callback: (value, index) => this._aagAxisTickInfo(labels, index).text,
+                        },
                     },
                     y: {
                         min: 0,
@@ -3032,47 +3076,55 @@ class CigLogTracker {
 
         const { labels, smoked, craved } = this._aagBuildDailySeries(start, end);
         const st = this._chartStyle();
-        // Dot + line degradation per spec §4 — both recede in steps as point
-        // density increases, rather than flipping abruptly at one threshold.
-        let pointRadius, lineWidth;
-        if (labels.length <= 14)      { pointRadius = 4;   lineWidth = 3;   } // week/fortnight
-        else if (labels.length <= 31) { pointRadius = 2.5; lineWidth = 2.5; } // month
-        else if (labels.length <= 95) { pointRadius = 0.8; lineWidth = 2;   } // 3 months
-        else                          { pointRadius = 0;   lineWidth = 1.5; } // 6mo/1yr
 
-        // Round the y-axis ceiling up to the nearest 10, minimum 10 — avoids a
-        // near-empty chart looking "full" just because only 1-2 events were logged.
-        const rawMax = Math.max(0, ...smoked.filter(v => v !== null), ...craved.filter(v => v !== null));
-        const yMax = Math.max(5, Math.ceil(rawMax / 5) * 5);
+        // Craved (line) keeps its own degradation tiers — dots stay on as a
+        // reference point against the x-axis labels at low density, but the
+        // line itself recedes faster than before now that Smoked is bars and
+        // Craved is meant to read as quiet supporting context, not a peer.
+        let cravedDotRadius, cravedLineWidth;
+        if (labels.length <= 14)      { cravedDotRadius = 3;   cravedLineWidth = 1.5; }
+        else if (labels.length <= 31) { cravedDotRadius = 2;   cravedLineWidth = 1.5; }
+        else if (labels.length <= 95) { cravedDotRadius = 0.8; cravedLineWidth = 1.5; }
+        else                          { cravedDotRadius = 0;   cravedLineWidth = 1;   }
+
+        // Bar thickness/spacing tapers as period grows — same tiers already
+        // proven on Resistance Rate Trend.
+        let barPercentage, categoryPercentage;
+        if (labels.length <= 14)      { barPercentage = 0.5; categoryPercentage = 0.6;  }
+        else if (labels.length <= 31) { barPercentage = 0.6; categoryPercentage = 0.7;  }
+        else if (labels.length <= 95) { barPercentage = 0.8; categoryPercentage = 0.85; }
+        else                          { barPercentage = 0.9; categoryPercentage = 0.95; }
 
         if (this._aagSmokingChart) { this._aagSmokingChart.destroy(); this._aagSmokingChart = null; }
 
         this._aagSmokingChart = new Chart(canvas.getContext('2d'), {
-            type: 'line',
             data: {
                 labels,
                 datasets: [
                     {
+                        type: 'bar',
                         label: 'Smoked',
                         data: smoked,
-                        borderColor: '#f1976d',
-                        backgroundColor: 'rgba(241,151,109,0.12)',
-                        pointRadius: pointRadius,
-                        pointHoverRadius: 6,
-                        borderWidth: lineWidth,
-                        tension: 0,
-                        fill: true,
+                        backgroundColor: '#f1976d',
+                        borderRadius: 50,
+                        borderSkipped: false,
+                        barPercentage,
+                        categoryPercentage,
+                        order: 2, // drawn first — sits behind the line
                     },
                     {
+                        type: 'line',
                         label: 'Craved',
                         data: craved,
-                        borderColor: 'rgba(217,217,217,0.45)',
+                        borderColor: 'rgba(217,217,217,0.3)',
                         backgroundColor: 'transparent',
-                        pointRadius: pointRadius,
-                        pointHoverRadius: 6,
-                        borderWidth: lineWidth,
+                        pointRadius: cravedDotRadius,
+                        pointHoverRadius: 5,
+                        pointBackgroundColor: 'rgba(217,217,217,0.5)',
+                        borderWidth: cravedLineWidth,
                         tension: 0,
                         fill: false,
+                        order: 1, // drawn last — sits in front of the bars
                     },
                 ],
             },
@@ -3080,11 +3132,7 @@ class CigLogTracker {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                    legend: {
-                        display: false,
-                        // position: 'top',
-                        // labels: { color: st.textPrimary, font: { family: st.font, size: 11 }, boxWidth: 12, padding: 10 },
-                    },
+                    legend: { display: false },
                     tooltip: {
                         backgroundColor: 'rgba(26,26,26,0.95)',
                         titleColor: st.textPrimary,
@@ -3105,12 +3153,19 @@ class CigLogTracker {
                 scales: {
                     x: {
                         grid: { display: false },
-                        ticks: { display: false },
+                        border: { display: false },
+                        ticks: {
+                            autoSkip: false,
+                            maxRotation: 0,
+                            font: { family: st.font, size: 10 },
+                            color: (ctx) => this._aagAxisTickInfo(labels, ctx.index).isSunday ? st.textPrimary : st.textSecond,
+                            callback: (value, index) => this._aagAxisTickInfo(labels, index).text,
+                        },
                     },
                     y: {
                         beginAtZero: true,
-                        suggestedMax: yMax,
                         grid: { color: st.gridColor },
+                        border: { display: false },
                         ticks: { color: st.textSecond, precision: 0, font: { family: st.font, size: 10 } },
                     },
                 },

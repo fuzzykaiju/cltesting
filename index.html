@@ -66,28 +66,30 @@
 
     <!-- At a Glance View -->
     <div id="atAGlanceView" class="aag-view" style="display:none;">
-        <div class="aag-header">
-            <button id="backToTableBtnAAG" class="back-btn" aria-label="Back to table">
-                <span class="ms">arrow_back</span>
-            </button>
-            <h2><span class="ms">visibility</span> At a glance</h2>
-        </div>
-        <div class="aag-period-scroller">
-            <button class="aag-period-chip selected" data-period="week">1 wk</button>
-            <button class="aag-period-chip" data-period="fortnight">2 wk</button>
-            <button class="aag-period-chip" data-period="month">1 mn</button>
-            <button class="aag-period-chip" data-period="3m">3 mn</button>
-            <button class="aag-period-chip" data-period="6m">6 mn</button>
-            <button class="aag-period-chip" data-period="1y">1 yr</button>
-        </div>
-        <div class="aag-date-nav">
-            <button id="aagPrev" class="cal-nav-btn" aria-label="Previous period">
-                <span class="ms">keyboard_arrow_left</span>
-            </button>
-            <span id="aagDateRangeLabel" class="aag-date-label"></span>
-            <button id="aagNext" class="cal-nav-btn" aria-label="Next period">
-                <span class="ms">keyboard_arrow_right</span>
-            </button>
+        <div class="aag-topbar">
+            <div class="aag-header">
+                <button id="backToTableBtnAAG" class="back-btn" aria-label="Back to table">
+                    <span class="ms">arrow_back</span>
+                </button>
+                <h2><span class="ms">visibility</span> At a glance</h2>
+            </div>
+            <div class="aag-period-scroller">
+                <button class="aag-period-chip selected" data-period="week">1 wk</button>
+                <button class="aag-period-chip" data-period="fortnight">2 wk</button>
+                <button class="aag-period-chip" data-period="month">1 mn</button>
+                <button class="aag-period-chip" data-period="3m">3 mn</button>
+                <button class="aag-period-chip" data-period="6m">6 mn</button>
+                <button class="aag-period-chip" data-period="1y">1 yr</button>
+            </div>
+            <div class="aag-date-nav">
+                <button id="aagPrev" class="cal-nav-btn" aria-label="Previous period">
+                    <span class="ms">keyboard_arrow_left</span>
+                </button>
+                <span id="aagDateRangeLabel" class="aag-date-label"></span>
+                <button id="aagNext" class="cal-nav-btn" aria-label="Next period">
+                    <span class="ms">keyboard_arrow_right</span>
+                </button>
+            </div>
         </div>
         <div class="aag-content" id="aagContent">
             <!-- Populated by _renderAtAGlance() -->

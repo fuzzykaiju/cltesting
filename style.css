@@ -2655,18 +2655,21 @@ body.aag-active .fixed-header {
     flex-direction: column;
 }
 
-.aag-header {
+.aag-topbar {
     position: sticky;
     top: 0;
     z-index: 100;
+    background-color: var(--bg-primary);
+    border-bottom: 1px solid rgba(217, 217, 217, 0.12);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+}
+
+.aag-header {
     display: flex;
     flex-direction: row-reverse;
     align-items: center;
     gap: 12px;
     padding: 12px 16px;
-    background-color: var(--bg-primary);
-    border-bottom: 1px solid rgba(217, 217, 217, 0.12);
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
 }
 
 .aag-header h2 {
@@ -2684,29 +2687,32 @@ body.aag-active .fixed-header {
 }
 
 .aag-period-scroller {
-    display: flex;
-    justify-content: center;
-    gap: 8px;
-    overflow-x: auto;
-    padding: 12px 16px 4px;
-    scrollbar-width: none;
-}
-
-.aag-period-scroller::-webkit-scrollbar {
-    display: none;
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    margin: 0 16px 4px;
+    border: 1px solid rgba(217, 217, 217, 0.2);
+    border-radius: 8px;
+    overflow: hidden;
 }
 
 .aag-period-chip {
-    flex-shrink: 0;
-    padding: 8px 16px;
+    padding: 9px 2px;
     background-color: var(--bg-secondary);
-    border: 1px solid rgba(217, 217, 217, 0.2);
-    border-radius: 20px;
+    border: none;
+    border-right: 1px solid rgba(217, 217, 217, 0.15);
     color: var(--text-secondary);
     font-family: inherit;
-    font-size: 0.85rem;
+    font-size: 0.78rem;
+    text-align: center;
     cursor: pointer;
-    transition: filter 0.2s, border-color 0.2s, color 0.2s;
+    transition: filter 0.2s, color 0.2s, background-color 0.2s;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.aag-period-chip:nth-child(6) {
+    border-right: none;
 }
 
 .aag-period-chip:hover {
@@ -2714,10 +2720,24 @@ body.aag-active .fixed-header {
 }
 
 .aag-period-chip.selected {
-    border-color: var(--amber);
-    background-color: rgba(241, 151, 109, 0.12);
+    background-color: rgba(241, 151, 109, 0.18);
     color: var(--amber);
     font-weight: bold;
+}
+
+@media (max-width: 380px) {
+    .aag-period-scroller {
+        grid-template-columns: repeat(3, 1fr);
+    }
+    .aag-period-chip:nth-child(3n) {
+        border-right: none;
+    }
+    .aag-period-chip:nth-child(-n+3) {
+        border-right: 1px solid rgba(217, 217, 217, 0.15);
+    }
+    .aag-period-chip:nth-child(n+4) {
+        border-top: 1px solid rgba(217, 217, 217, 0.15);
+    }
 }
 
 .aag-date-nav {
@@ -2779,8 +2799,12 @@ body.aag-active .fixed-header {
 
 .aag-chart-container {
     position: relative;
-    height: 260px;
+    height: 195px;
     margin-bottom: 4px;
+}
+
+.aag-chart-container canvas {
+    touch-action: pan-y;
 }
 
 .aag-stat-row {
