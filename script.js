@@ -3586,10 +3586,10 @@ class CigLogTracker {
     // screen is always 1/4 each, matching the period-selector grid pattern.
     _aagTimeOfDaySegments() {
         return [
-            { key: 'morning',   label: 'Morning',   range: '06:00–11:59', icon: 'wb_twilight',   hours: [6,7,8,9,10,11] },
-            { key: 'afternoon', label: 'Afternoon', range: '12:00–17:59', icon: 'sunny',          hours: [12,13,14,15,16,17] },
-            { key: 'evening',   label: 'Evening',   range: '18:00–21:59', icon: 'wb_twilight_2',  hours: [18,19,20,21] },
-            { key: 'night',     label: 'Night',     range: '22:00–05:59', icon: 'moon_stars',     hours: [22,23,0,1,2,3,4,5] },
+            { key: 'morning',   label: 'Morning',   range: '06:00-11:59', icon: 'wb_twilight',   hours: [6,7,8,9,10,11] },
+            { key: 'afternoon', label: 'Afternoon', range: '12:00-17:59', icon: 'sunny',          hours: [12,13,14,15,16,17] },
+            { key: 'evening',   label: 'Evening',   range: '18:00-21:59', icon: 'wb_twilight_2',  hours: [18,19,20,21] },
+            { key: 'night',     label: 'Night',     range: '22:00-05:59', icon: 'moon_stars',     hours: [22,23,0,1,2,3,4,5] },
         ];
     }
 
