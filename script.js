@@ -69,7 +69,6 @@ class CigLogTracker {
         this.settings    = JSON.parse(localStorage.getItem('ciglog_v1_settings')) || null;
         this.entries     = JSON.parse(localStorage.getItem('ciglog_v1_entries'))  || [];
         this.activeDate  = null;   // date string currently open in any modal
-        this.chart       = null;
         this._confirmCb  = null;
         this._toastTimer = null;
 
@@ -108,7 +107,6 @@ class CigLogTracker {
             info:        $('infoModal'),
             editDay:     $('editDayModal'),
             editTrigger: $('editTriggerModal'),
-            chart:       $('chartModal'),
             about:       $('aboutModal'),
             readme:      $('readmeModal'),
             changelog:   document.getElementById('changelogModal'),
@@ -180,15 +178,7 @@ class CigLogTracker {
 
         //Smart Craving Inference
         this.smartInferenceGroup = document.getElementById('smartInferenceGroup');
-
-        // Chart
-        this.timeRange    = $('timeRange');
-        this.statSmoked   = $('totalSmoked');
-        this.statCravings = $('totalCravings');
-        this.statMoney    = $('moneySpent');
-        this.statLifeLost = $('lifeLost');
-        this.chart        = null;
-
+        
         // Trigger sections
         this.cravingTriggerToggle  = $('cravingTriggerToggle');
         this.smokeTriggerToggle    = $('smokeTriggerToggle');
@@ -225,9 +215,7 @@ class CigLogTracker {
         document.getElementById('closeMenu').addEventListener('click',  () => this._closeMenu());
         this.menuOverlay.addEventListener('click', () => this._closeMenu());
 
-        // Menu items
-        document.getElementById('chartBtn').addEventListener('click',
-            () => { this._closeMenu(); this._openModal('chart'); setTimeout(() => this._renderChart(), 100); });
+        // Menu items        
         document.getElementById('atAGlanceBtn').addEventListener('click',
             () => { this._closeMenu(); this._showAtAGlanceView(); });
         document.getElementById('analyticsBtn').addEventListener('click',
@@ -437,9 +425,6 @@ class CigLogTracker {
         document.getElementById('saveEditDay').addEventListener('click',
             () => this._saveEditDay());
 
-        // Chart controls
-        this.timeRange.addEventListener('change', () => this._renderChart());
-
         // Edit trigger modal
         document.querySelector('.close-edit-trigger').addEventListener('click',
             () => this._closeModal('editTrigger'));
@@ -448,8 +433,7 @@ class CigLogTracker {
         document.getElementById('confirmEditTrigger').addEventListener('click',
             () => this._confirmEditTriggers());
 
-        // Chart / About / Readme / Import close buttons
-        document.querySelector('.close-chart').addEventListener('click',  () => this._closeChart());
+        // About / Readme / Import close buttons
         document.querySelector('.close-about').addEventListener('click',  () => this._closeModal('about'));
         document.querySelector('.close-readme').addEventListener('click', () => this._closeModal('readme'));
         document.querySelector('.close-changelog').addEventListener('click', () => this._closeModal('changelog'));
@@ -504,8 +488,7 @@ class CigLogTracker {
             const locked = ['settings', 'createToday', 'confirm', 'reset', 'skippedDay', 'dailyLimit', 'smartInferenceOnboarding'];
             for (const [key, modal] of Object.entries(this.modals)) {
                 if (e.target === modal && !locked.includes(key)) {
-                    if (key === 'chart') this._closeChart();
-                    else                 this._closeModal(key);
+                    this._closeModal(key);
                     break;
                 }
             }
@@ -1945,129 +1928,7 @@ class CigLogTracker {
             gridColor:   'rgba(217,217,217,0.07)',
             font:        'Consolas, Monaco, monospace',
         };
-    }
-
-    _filteredEntries() {
-        const days   = parseInt(this.timeRange.value);
-        const now    = new Date();
-        const cutoff = new Date(now);
-        cutoff.setDate(cutoff.getDate() - days);
-
-        const filtered = this.entries
-            .filter(e => { const d = this._toDate(e.date); return d >= cutoff && d <= now; })
-            .sort((a, b) => this._toDate(a.date) - this._toDate(b.date));
-
-        const totalSmoked   = filtered.reduce((s, e) => s + e.smoked.reduce((x, y) => x + y.count, 0), 0);
-        const totalCravings = filtered.reduce((s, e) => s + e.cravings.length, 0);
-        const totalMoney    = filtered.reduce((s, e) => s + e.smoked.reduce((x, y) =>
-            x + y.count * (y.pricePerCigarette ?? this.settings.cigarettePrice), 0), 0);
-        const totalMLL      = totalSmoked * 20;
-        this.statSmoked.textContent   = totalSmoked;
-        this.statCravings.textContent = totalCravings;
-        this.statMoney.textContent = this.settings.currency + parseFloat(totalMoney.toFixed(2)).toString();
-        this.statLifeLost.textContent = this._fmtMLL(totalMLL);
-
-        return filtered;
-    }
-
-    // New single chart
-    _renderChart() {
-        const filtered = this._filteredEntries();
-        const st = this._chartStyle();
-
-        if (this.chart) { this.chart.destroy(); this.chart = null; }
-
-        this.chart = new Chart(
-            document.getElementById('chartMain').getContext('2d'), {
-                type: 'line',
-                data: {
-                    labels: filtered.map(e => e.date),
-                    datasets: [
-                        {
-                            label: 'Smoked',
-                            data: filtered.map(e => e.smoked.reduce((s, x) => s + x.count, 0)),
-                            borderColor: '#FF9595',
-                            backgroundColor: 'rgba(255,149,149,0.07)',
-                            pointBackgroundColor: '#FF9595',
-                            pointRadius: 3,
-                            pointHoverRadius: 5,
-                            borderWidth: 2,
-                            tension: 0.3,
-                            fill: true,
-                        },
-                        {
-                            label: 'Craved',
-                            data: filtered.map(e => e.cravings.length),
-                            borderColor: '#d9d9d9',
-                            backgroundColor: 'rgba(217,217,217,0.04)',
-                            pointBackgroundColor: '#d9d9d9',
-                            pointRadius: 3,
-                            pointHoverRadius: 5,
-                            borderWidth: 1.5,
-                            borderDash: [5, 4],
-                            tension: 0.3,
-                            fill: false,
-                        },
-                    ],
-                },
-                options: this._chartOptions(st),
-            }
-        );
-    }
-
-    _chartOptions(st, { stacked = false, tooltipExtra = null } = {}) {
-        return {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    display: true,
-                    position: 'top',
-                    labels: {
-                        color: st.textPrimary,
-                        font: { family: st.font, size: 11 },
-                        boxWidth: 12,
-                        padding: 10,
-                    },
-                },
-                tooltip: {
-                    backgroundColor: 'rgba(26,26,26,0.95)',
-                    titleColor: st.textPrimary,
-                    bodyColor: st.textPrimary,
-                    borderColor: 'rgba(217,217,217,0.25)',
-                    borderWidth: 1,
-                    cornerRadius: 6,
-                    callbacks: tooltipExtra ? {
-                        afterBody: (items) => {
-                            const extra = tooltipExtra(items[0]);
-                            return extra ? [extra] : [];
-                        },
-                    } : {},
-                },
-            },
-            scales: {
-                x: {
-                    stacked,
-                    grid:  { color: st.gridColor },
-                    ticks: { color: st.textSecond, maxRotation: 45,
-                             font: { family: st.font, size: 10 } },
-                },
-                y: {
-                    stacked,
-                    beginAtZero: true,
-                    grid:  { color: st.gridColor },
-                    ticks: { stepSize: 1, color: st.textSecond,
-                             font: { family: st.font, size: 10 } },
-                },
-            },
-            animation: { duration: 400, easing: 'easeOutQuart' },
-        };
-    }
-
-    _closeChart() {
-        this._closeModal('chart');
-        if (this.chart) { this.chart.destroy(); this.chart = null; }
-    }
+    }    
 
     // --- Export / Import ---
 
@@ -2996,7 +2857,7 @@ class CigLogTracker {
                 datasets: [{
                     label: 'Resistance rate',
                     data: rates,
-                    backgroundColor: '#f1976d',
+                    backgroundColor: '#C6E0B4',
                     borderRadius: 50,      // any large number auto-clamps to a full pill, at any bar width
                     borderSkipped: false,  // rounds both ends, not just the top
                     barPercentage,
@@ -3042,6 +2903,7 @@ class CigLogTracker {
                         max: 100,
                         grid: { color: st.gridColor },
                         border: { display: false },
+                        afterFit: (scale) => { scale.width = 34; },
                         ticks: {
                             stepSize: 25,
                             color: st.textSecond,
@@ -3176,6 +3038,7 @@ class CigLogTracker {
                         beginAtZero: true,
                         grid: { color: st.gridColor },
                         border: { display: false },
+                        afterFit: (scale) => { scale.width = 34; },
                         ticks: { color: st.textSecond, precision: 0, font: { family: st.font, size: 10 } },
                     },
                 },
@@ -3391,11 +3254,26 @@ class CigLogTracker {
         const barMode = this._aagIsLimitBarMode();
         const counts = this._aagComputeDailyLimitCounts(start, end);
 
-        const legendRow = `
-            <div class="aag-limit-legend">
-                <span class="aag-limit-legend-item"><span class="aag-intensity-dot" style="background:var(--green);"></span>Within limit</span>
-                <span class="aag-limit-legend-item"><span class="aag-intensity-dot" style="background:var(--red);"></span>Over limit</span>
-                <span class="aag-limit-legend-item"><span class="aag-intensity-dot" style="background:var(--text-secondary);"></span>No limit</span>
+        const pct = counts.total > 0 ? {
+            within: Math.round((counts.within / counts.total) * 100),
+            over: Math.round((counts.over / counts.total) * 100),
+            noLimit: Math.round((counts.noLimit / counts.total) * 100),
+        } : { within: 0, over: 0, noLimit: 0 };
+
+        const breakdownRows = `
+            <div class="aag-intensity-breakdown">
+                <div class="aag-intensity-row">
+                    <span class="aag-intensity-left"><span class="aag-intensity-dot" style="background:var(--green);"></span>Within limit</span>
+                    <span>${pct.within}% (${counts.within})</span>
+                </div>
+                <div class="aag-intensity-row">
+                    <span class="aag-intensity-left"><span class="aag-intensity-dot" style="background:var(--red);"></span>Over limit</span>
+                    <span>${pct.over}% (${counts.over})</span>
+                </div>
+                <div class="aag-intensity-row">
+                    <span class="aag-intensity-left"><span class="aag-intensity-dot" style="background:var(--text-secondary);"></span>No limit</span>
+                    <span>${pct.noLimit}% (${counts.noLimit})</span>
+                </div>
             </div>`;
 
         let bodyHtml;
@@ -3404,7 +3282,7 @@ class CigLogTracker {
                 <div class="aag-chart-container">
                     <canvas id="aagLimitChart"></canvas>
                 </div>
-                ${legendRow}
+                ${breakdownRows}
                 <div class="aag-stat-row">
                     <div class="aag-stat">
                         <span class="aag-stat-label">Days within limit</span>
@@ -3414,29 +3292,11 @@ class CigLogTracker {
         } else if (counts.total === 0) {
             bodyHtml = '<p class="analytics-empty" style="margin:12px 0;">No data in this period.</p>';
         } else {
-            const pct = {
-                within: Math.round((counts.within / counts.total) * 100),
-                over: Math.round((counts.over / counts.total) * 100),
-                noLimit: Math.round((counts.noLimit / counts.total) * 100),
-            };
             bodyHtml = `
                 <div class="aag-donut-container">
                     <canvas id="aagLimitDonutChart"></canvas>
                 </div>
-                <div class="aag-intensity-breakdown">
-                    <div class="aag-intensity-row">
-                        <span class="aag-intensity-left"><span class="aag-intensity-dot" style="background:var(--green);"></span>Within limit</span>
-                        <span>${pct.within}% (${counts.within})</span>
-                    </div>
-                    <div class="aag-intensity-row">
-                        <span class="aag-intensity-left"><span class="aag-intensity-dot" style="background:var(--red);"></span>Over limit</span>
-                        <span>${pct.over}% (${counts.over})</span>
-                    </div>
-                    <div class="aag-intensity-row">
-                        <span class="aag-intensity-left"><span class="aag-intensity-dot" style="background:var(--text-secondary);"></span>No limit</span>
-                        <span>${pct.noLimit}% (${counts.noLimit})</span>
-                    </div>
-                </div>
+                ${breakdownRows}
                 <div class="aag-intensity-caption">${counts.within} of ${counts.total} days within limit</div>`;
         }
 
@@ -3527,6 +3387,7 @@ class CigLogTracker {
                         beginAtZero: true,
                         grid: { color: st.gridColor },
                         border: { display: false },
+                        afterFit: (scale) => { scale.width = 34; },
                         ticks: { color: st.textSecond, precision: 0, font: { family: st.font, size: 10 } },
                     },
                 },
@@ -4610,9 +4471,7 @@ class CigLogTracker {
                 <span id="calMonthLabel" class="pattern-month-label">${calMonthLabel}</span>
                 <button id="calNext" class="cal-nav-btn"><span class="ms">keyboard_arrow_right</span></button>
             </div>
-            <div class="cal-day-headers">
-                <span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>
-            </div>
+            
             <div id="calGrid" class="cal-grid"></div>
         `, 'Days with logged smoking activity are highlighted.'));
 
@@ -4843,11 +4702,11 @@ class CigLogTracker {
             nextBtn.style.opacity = nextBtn.disabled ? '0.3' : '1';
         }
 
-        // First entry date
+        // First entry date (for muting pre‑history days)
         const sortedEntries = [...this.entries].sort((a, b) => this._toDate(a.date) - this._toDate(b.date));
         const firstEntryDate = sortedEntries.length ? this._toDate(sortedEntries[0].date) : now;
 
-        // Build a set of dates that have smoked entries
+        // Set of dates that have any smoked entries
         const smokedDates = new Set();
         this.entries.forEach(e => {
             if (e.smoked.reduce((s, x) => s + x.count, 0) > 0) smokedDates.add(e.date);
@@ -4857,17 +4716,22 @@ class CigLogTracker {
         const lastDay  = new Date(year, month + 1, 0);
         const today    = new Date(); today.setHours(0,0,0,0);
 
-        // Day of week of first day, Monday-based (0=Mon, 6=Sun)
+        // Day of week (Monday‑based: 0 = Monday, 6 = Sunday)
         let startDow = firstDay.getDay() - 1;
         if (startDow < 0) startDow = 6;
 
-        let cells = '';
+        // Build grid: first row = day headers
+        const daysOfWeek = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+        let cells = daysOfWeek.map(day =>
+            `<div class="cal-cell cal-header">${day}</div>`
+        ).join('');
 
-        // Empty cells before first day
+        // Empty cells before the first day of the month
         for (let i = 0; i < startDow; i++) {
             cells += `<div class="cal-cell cal-empty"></div>`;
         }
 
+        // Date cells
         for (let d = 1; d <= lastDay.getDate(); d++) {
             const cellDate = new Date(year, month, d);
             cellDate.setHours(0,0,0,0);
@@ -4876,10 +4740,10 @@ class CigLogTracker {
             const yy   = String(year - 2000).padStart(2, '0');
             const dateStr = `${dd}-${mm}-${yy}`;
 
-            const isFuture   = cellDate > today;
+            const isFuture      = cellDate > today;
             const isBeforeFirst = cellDate < firstEntryDate;
-            const isSmoked   = smokedDates.has(dateStr);
-            const isToday    = cellDate.getTime() === today.getTime();
+            const isSmoked      = smokedDates.has(dateStr);
+            const isToday       = cellDate.getTime() === today.getTime();
 
             let cls = 'cal-cell';
             if (isFuture || isBeforeFirst) cls += ' cal-muted';
@@ -4893,21 +4757,29 @@ class CigLogTracker {
         const grid = document.getElementById('calGrid');
         if (grid) grid.innerHTML = cells;
 
+        // Update month label
         const label = document.getElementById('calMonthLabel');
-        if (label) label.textContent = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' })
-            .format(new Date(year, month));
+        if (label) {
+            label.textContent = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' })
+                .format(new Date(year, month));
+        }
 
-        if (prevBtn) prevBtn.onclick = () => {
-            if (this._calMonth === 0) { this._calMonth = 11; this._calYear--; }
-            else this._calMonth--;
-            this._renderMonthlyCalendar();
-        };
-        if (nextBtn) nextBtn.onclick = () => {
-            if (year === now.getFullYear() && month === now.getMonth()) return;
-            if (this._calMonth === 11) { this._calMonth = 0; this._calYear++; }
-            else this._calMonth++;
-            this._renderMonthlyCalendar();
-        };
+        // Navigation buttons (preserve existing behaviour)
+        if (prevBtn) {
+            prevBtn.onclick = () => {
+                if (this._calMonth === 0) { this._calMonth = 11; this._calYear--; }
+                else this._calMonth--;
+                this._renderMonthlyCalendar();
+            };
+        }
+        if (nextBtn) {
+            nextBtn.onclick = () => {
+                if (year === now.getFullYear() && month === now.getMonth()) return;
+                if (this._calMonth === 11) { this._calMonth = 0; this._calYear++; }
+                else this._calMonth++;
+                this._renderMonthlyCalendar();
+            };
+        }
     }
     
     _makeSection(icon, title, subtitle, bodyHtml, helpText = null) {
