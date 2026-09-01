@@ -2829,7 +2829,7 @@ class CigLogTracker {
                 </div>
             </div>`;
 
-        return this._aagMakeCard('trending_up', 'Resistance Rate Trend', body);
+        return this._aagMakeCard('assignment_turned_in', 'Resistance Rate Trend', body);
     }
 
     _aagRenderResistanceChart(start, end) {
@@ -2948,7 +2948,7 @@ class CigLogTracker {
                 </div>
             </div>`;
 
-        return this._aagMakeCard('show_chart', 'Smoking Pattern', body);
+        return this._aagMakeCard('assignment_late', 'Smoking Pattern', body);
     }
 
     _aagRenderSmokingPatternChart(start, end) {
@@ -3081,7 +3081,7 @@ class CigLogTracker {
 
         if (total === 0) {
             const body = '<p class="analytics-empty" style="margin:12px 0;">No cravings with intensity logged in this period.</p>';
-            return this._aagMakeCard('mode_heat', 'Intensity Distribution', body);
+            return this._aagMakeCard('circles_ext', 'Intensity Distribution', body);
         }
 
         const pct = {
@@ -3127,7 +3127,7 @@ class CigLogTracker {
             </div>
             ${captionHtml}`;
 
-        return this._aagMakeCard('mode_heat', 'Intensity Distribution', body);
+        return this._aagMakeCard('circles_ext', 'Intensity Distribution', body);
     }
 
     _aagRenderIntensityChart(start, end) {
@@ -3491,7 +3491,7 @@ class CigLogTracker {
 
         if (total === 0) {
             const body = '<p class="analytics-empty" style="margin:12px 0;">No smoking logged in this period.</p>';
-            return this._aagMakeCard('schedule', 'Time of Day', body);
+            return this._aagMakeCard('timelapse', 'Time of Day', body);
         }
 
         const segColors = { morning: '#FAC775', afternoon: '#f1976d', evening: '#d9784a', night: '#7a5236' };
@@ -3525,7 +3525,7 @@ class CigLogTracker {
                 <span style="color:var(--amber);font-weight:bold;">${peakLabel}</span> is your most active time.
             </div>`;
 
-        return this._aagMakeCard('schedule', 'Time of Day', body);
+        return this._aagMakeCard('timelapse', 'Time of Day', body);
     }
 
     // Extracted from the _delta closure inside _renderAnalytics() so both
