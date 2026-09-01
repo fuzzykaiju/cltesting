@@ -2470,10 +2470,29 @@ class CigLogTracker {
         document.getElementById('atAGlanceView').style.display = 'none';
         document.querySelector('.main-content').style.display = 'block';
         document.body.classList.remove('aag-active');
-        if (this._aagSmokingChart) { this._aagSmokingChart.destroy(); this._aagSmokingChart = null; }
-        if (this._aagResistanceChart) { this._aagResistanceChart.destroy(); this._aagResistanceChart = null; }
-        if (this._aagIntensityChart) { this._aagIntensityChart.destroy(); this._aagIntensityChart = null; }
-        if (this._aagLimitChart) { this._aagLimitChart.destroy(); this._aagLimitChart = null; }
+
+        if (this._aagSmokingChart) {
+            if (this._aagSmokingChart._hammer) {
+                this._aagSmokingChart._hammer.destroy();
+            }
+            this._aagSmokingChart.destroy();
+            this._aagSmokingChart = null;
+        }
+        if (this._aagResistanceChart) {
+            if (this._aagResistanceChart._hammer) {
+                this._aagResistanceChart._hammer.destroy();
+            }
+            this._aagResistanceChart.destroy();
+            this._aagResistanceChart = null;
+        }
+        if (this._aagIntensityChart) {
+            this._aagIntensityChart.destroy();
+            this._aagIntensityChart = null;
+        }
+        if (this._aagLimitChart) {
+            this._aagLimitChart.destroy();
+            this._aagLimitChart = null;
+        }
     }
 
     // Returns { start: Date, end: Date, label: string } for the calendar-aligned
@@ -2883,21 +2902,16 @@ class CigLogTracker {
                     },
                     zoom: {
                         pan: {
-                            enabled: true,
-                            mode: 'x',
-                            threshold: 5,            // prevents accidental pans
+                            enabled: false
                         },
                         zoom: {
                             wheel: { enabled: true },
-                            pinch: { enabled: true, threshold: 0.5 }, // lower = more responsive
-                            mode: 'x',
-                            threshold: 5,
+                            pinch: { enabled: false }
                         },
                         drag: {
-                            enabled: true,           // enables one‑finger pan (also helps touch)
-                            threshold: 10,
-                        },
-                    }
+                            enabled: false
+                        }
+                    },
                 },
                 scales: {
                     x: {
@@ -2928,10 +2942,7 @@ class CigLogTracker {
                 animation: { duration: 400, easing: 'easeOutQuart' },
             },
         });
-        // Force touch detection for mobile zoom
-        this._aagResistanceChart.canvas.addEventListener('touchstart', function(e) {
-            this._aagResistanceChart.update('none');
-        }.bind(this), { passive: true });
+        this._aagEnablePinchZoom(this._aagResistanceChart, canvas.parentElement);
     }
 
     _aagRenderSmokingPatternCard(start, end, prevStart, prevEnd) {
@@ -3032,21 +3043,16 @@ class CigLogTracker {
                     },
                     zoom: {
                         pan: {
-                            enabled: true,
-                            mode: 'x',
-                            threshold: 5,            // prevents accidental pans
+                            enabled: false
                         },
                         zoom: {
                             wheel: { enabled: true },
-                            pinch: { enabled: true, threshold: 0.5 }, // lower = more responsive
-                            mode: 'x',
-                            threshold: 5,
+                            pinch: { enabled: false }
                         },
                         drag: {
-                            enabled: true,           // enables one‑finger pan (also helps touch)
-                            threshold: 10,
-                        },
-                    }
+                            enabled: false
+                        }
+                    },
                 },
                 scales: {
                     x: {
@@ -3071,10 +3077,7 @@ class CigLogTracker {
                 animation: { duration: 400, easing: 'easeOutQuart' },
             },
         });
-        // Force touch detection for mobile zoom
-        this._aagSmokingChart.canvas.addEventListener('touchstart', function(e) {
-            this._aagSmokingChart.update('none');
-        }.bind(this), { passive: true });
+        this._aagEnablePinchZoom(this._aagSmokingChart, canvas.parentElement);
     }
     
     // Counts cravings with a set intensity (inferred cravings have
@@ -3542,6 +3545,45 @@ class CigLogTracker {
             </div>`;
 
         return this._aagMakeCard('timelapse', 'Time of Day', body);
+    }
+
+    _aagEnablePinchZoom(chartInstance, container) {
+        if (!container || typeof Hammer === 'undefined') return;
+
+        const hammer = new Hammer(container);
+        hammer.get('pinch').set({ enable: true });
+        hammer.get('pan').set({ enable: true, direction: Hammer.DIRECTION_HORIZONTAL });
+
+        let lastScale = 1;
+        let lastPanX = 0;
+
+        hammer.on('pinchstart', function(e) {
+            lastScale = chartInstance.getZoomLevel() || 1;
+        });
+
+        hammer.on('pinch', function(e) {
+            const newScale = Math.max(0.5, Math.min(10, lastScale * e.scale));
+            chartInstance.zoom(newScale);
+            chartInstance.update('none');
+        });
+
+        hammer.on('panstart', function(e) {
+            if (!chartInstance.scales.x) return;
+            lastPanX = chartInstance.scales.x.min;
+        });
+
+        hammer.on('pan', function(e) {
+            if (!chartInstance.scales.x) return;
+            const deltaX = e.deltaX;
+            const scale = chartInstance.getZoomLevel() || 1;
+            const visibleRange = chartInstance.scales.x.max - chartInstance.scales.x.min;
+            const panAmount = -(deltaX / container.clientWidth) * visibleRange / scale;
+            chartInstance.pan({ x: panAmount, y: 0 });
+            chartInstance.update('none');
+        });
+
+        // Store hammer instance for cleanup
+        chartInstance._hammer = hammer;
     }
 
     // Extracted from the _delta closure inside _renderAnalytics() so both
