@@ -2680,8 +2680,9 @@ body.aag-active .fixed-header {
     margin-bottom: 4px;
 }
 
-.aag-chart-container canvas {
-    touch-action: pan-y;
+.aag-chart-container canvas,
+#chartMain {
+    touch-action: none;
 }
 
 .aag-stat-row {

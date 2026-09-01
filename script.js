@@ -2882,8 +2882,17 @@ class CigLogTracker {
                         },
                     },
                     zoom: {
-                        pan: { enabled: true, mode: 'x' },
-                        zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' },
+                        pan: {
+                            enabled: true,
+                            mode: 'x',
+                            threshold: 5,
+                        },
+                        zoom: {
+                            wheel: { enabled: true },
+                            pinch: { enabled: true },
+                            mode: 'x',
+                            threshold: 5,
+                        },
                     },
                 },
                 scales: {
@@ -3014,11 +3023,16 @@ class CigLogTracker {
                         cornerRadius: 6,
                     },
                     zoom: {
-                        pan: { enabled: true, mode: 'x' },
+                        pan: {
+                            enabled: true,
+                            mode: 'x',
+                            threshold: 5,
+                        },
                         zoom: {
                             wheel: { enabled: true },
                             pinch: { enabled: true },
                             mode: 'x',
+                            threshold: 5,
                         },
                     },
                 },
@@ -3699,8 +3713,8 @@ class CigLogTracker {
     }
 
     _todBinLabels() {
-        return ['12–2a','2–4a','4–6a','6–8a','8–10a','10a–12p',
-                '12–2p','2–4p','4–6p','6–8p','8–10p','10p–12a'];
+        return ['12 AM - 2 AM','2 AM - 4 AM','4 AM - 6 AM','6 AM -8 AM','8 AM - 10 AM','10 AM - 12 PM',
+                '12 PM - 2 PM','2 PM - 4 PM','4 PM - 6 PM','6 PM - 8 PM','8 PM - 10 PM','10 PM - 12AM'];
     }
 
     _triggerLabel(id) {
@@ -4614,80 +4628,7 @@ class CigLogTracker {
             pairBody = `<div class="trigger-pair-list">${items}</div>`;
         }
         content.appendChild(this._makeSection('join', 'Trigger Combinations', null, pairBody, 'Trigger pairs that frequently appear together. Minimum 5 combined events.'));
-
-        // 6. Time of day
-        content.appendChild(this._makeSection('schedule', 'Time of Day',
-            null, `
-            <div class="analytics-chart-container">
-                <canvas id="analyticsTimeOfDayChart"></canvas>
-            </div>
-        `, 'Cravings and smoking frequency by time of day, in 2-hour bins.'
-        ));
-
-        requestAnimationFrame(() => {
-            if (this._analyticsChart) { this._analyticsChart.destroy(); this._analyticsChart = null; }
-            const tod = this._computeTimeOfDay(entries);
-            const st  = this._chartStyle();
-            this._analyticsChart = new Chart(
-                document.getElementById('analyticsTimeOfDayChart').getContext('2d'), {
-                    type: 'bar',
-                    data: {
-                        labels: this._todBinLabels(),
-                        datasets: [
-                            {
-                                label: 'Cravings',
-                                data: tod.cravings,
-                                backgroundColor: '#A6A6A6',
-                                borderColor: '#A6A6A6',
-                                borderWidth: 1,
-                                borderRadius: 3,
-                                barPercentage: 0.8,
-                            },
-                            {
-                                label: 'Smoked',
-                                data: tod.smoked,
-                                backgroundColor: '#F1976D',
-                                borderColor: '#F1976D',
-                                borderWidth: 1,
-                                borderRadius: 3,
-                                barPercentage: 0.8,
-                            },
-                        ],
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: {
-                                display: true,
-                                position: 'top',
-                                labels: { color: st.textPrimary, font: { family: st.font, size: 10 }, boxWidth: 10, padding: 8 },
-                            },
-                            tooltip: {
-                                backgroundColor: 'rgba(26,26,26,0.95)',
-                                titleColor: st.textPrimary,
-                                bodyColor: st.textPrimary,
-                                borderColor: 'rgba(217,217,217,0.25)',
-                                borderWidth: 1,
-                                cornerRadius: 6,
-                            },
-                        },
-                        scales: {
-                            x: {
-                                grid: { color: st.gridColor },
-                                ticks: { color: st.textSecond, maxRotation: 0, font: { family: st.font, size: 9 } },
-                            },
-                            y: {
-                                beginAtZero: true,
-                                grid: { color: st.gridColor },
-                                ticks: { stepSize: 1, color: st.textSecond, font: { family: st.font, size: 10 } },
-                            },
-                        },
-                        animation: { duration: 400, easing: 'easeOutQuart' },
-                    },
-                }
-            );
-        });
+        
     }
 
     _renderMonthlyCalendar() {
