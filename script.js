@@ -2928,6 +2928,10 @@ class CigLogTracker {
                 animation: { duration: 400, easing: 'easeOutQuart' },
             },
         });
+        // Force touch detection for mobile zoom
+        this._aagResistanceChart.canvas.addEventListener('touchstart', function(e) {
+            this._aagResistanceChart.update('none');
+        }.bind(this), { passive: true });
     }
 
     _aagRenderSmokingPatternCard(start, end, prevStart, prevEnd) {
@@ -3067,6 +3071,10 @@ class CigLogTracker {
                 animation: { duration: 400, easing: 'easeOutQuart' },
             },
         });
+        // Force touch detection for mobile zoom
+        this._aagSmokingChart.canvas.addEventListener('touchstart', function(e) {
+            this._aagSmokingChart.update('none');
+        }.bind(this), { passive: true });
     }
     
     // Counts cravings with a set intensity (inferred cravings have
