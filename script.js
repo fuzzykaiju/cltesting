@@ -80,6 +80,9 @@ class CigLogTracker {
         this._aagResistanceChart = null;
         this._aagIntensityChart = null;
         this._aagLimitChart = null;
+        this._aagDrillBack = null; // one saved {period, anchorDate} snapshot, restored by the back arrow
+        this._aagSmokingPendingTap = null; // { index, timer } — first tap on a bucket bar, awaiting confirm
+        this._aagResistancePendingTap = null; // same, for the Resistance Rate Trend chart
 
         this._cacheElements();
         this._bindListeners();
@@ -519,8 +522,14 @@ class CigLogTracker {
                 chip.classList.add('selected');
                 this._aagPeriod = chip.dataset.period;
                 this._aagAnchorDate = new Date(); // re-anchor to "today" on period switch
+                this._aagDrillBack = null; // manual period choice abandons any drill-down context
                 this._renderAtAGlance();
             });
+        });
+
+        // At a Glance — drill-down back arrow (delegated, since cards rebuild every render)
+        document.getElementById('aagContent').addEventListener('click', (e) => {
+            if (e.target.closest('.aag-drill-back-btn')) this._aagDrillBackOut();
         });
 
         // At a Glance — date paging arrows
@@ -2470,29 +2479,11 @@ class CigLogTracker {
         document.getElementById('atAGlanceView').style.display = 'none';
         document.querySelector('.main-content').style.display = 'block';
         document.body.classList.remove('aag-active');
-
-        if (this._aagSmokingChart) {
-            if (this._aagSmokingChart._hammer) {
-                this._aagSmokingChart._hammer.destroy();
-            }
-            this._aagSmokingChart.destroy();
-            this._aagSmokingChart = null;
-        }
-        if (this._aagResistanceChart) {
-            if (this._aagResistanceChart._hammer) {
-                this._aagResistanceChart._hammer.destroy();
-            }
-            this._aagResistanceChart.destroy();
-            this._aagResistanceChart = null;
-        }
-        if (this._aagIntensityChart) {
-            this._aagIntensityChart.destroy();
-            this._aagIntensityChart = null;
-        }
-        if (this._aagLimitChart) {
-            this._aagLimitChart.destroy();
-            this._aagLimitChart = null;
-        }
+        this._aagDrillBack = null;
+        if (this._aagSmokingChart) { this._aagSmokingChart.destroy(); this._aagSmokingChart = null; }
+        if (this._aagResistanceChart) { this._aagResistanceChart.destroy(); this._aagResistanceChart = null; }
+        if (this._aagIntensityChart) { this._aagIntensityChart.destroy(); this._aagIntensityChart = null; }
+        if (this._aagLimitChart) { this._aagLimitChart.destroy(); this._aagLimitChart = null; }
     }
 
     // Returns { start: Date, end: Date, label: string } for the calendar-aligned
@@ -2644,13 +2635,14 @@ class CigLogTracker {
 
     // Leaner sibling of _makeSection() — no help-tooltip/subtitle machinery.
     // Consumed by Steps 2–6.
-    _aagMakeCard(icon, title, bodyHtml) {
+    _aagMakeCard(icon, title, bodyHtml, headerExtra = '') {
         const section = document.createElement('div');
         section.className = 'aag-section';
         section.innerHTML = `
             <div class="aag-section-header">
                 <span class="ms">${icon}</span>
                 <h3>${title}</h3>
+                ${headerExtra}
             </div>
             <div class="aag-section-body">${bodyHtml}</div>`;
         return section;
@@ -2680,8 +2672,203 @@ class CigLogTracker {
             return (!min || d < min) ? d : min;
         }, null);
     }
-
     
+    // A previous period only counts as a fair comparison baseline if it
+    // falls ENTIRELY on/after the user's first-ever entry — not just
+    // "has at least one entry somewhere in it." A period straddling or
+    // predating first-entry has an artificially tiny real sample, which
+    // produces wildly inflated deltas (e.g. 1→11 reading as "+1000%").
+    _aagPreviousPeriodIsReliable(prevStart) {
+        const firstEntryDate = this._getFirstEntryDate();
+        return !!firstEntryDate && prevStart >= firstEntryDate;
+    }
+    
+    // Which granularity Smoking Pattern / Resistance Rate Trend render at,
+    // driven directly by the selected period — week/fortnight/month stay
+    // daily; 3mo/6mo bucket weekly; 1yr buckets monthly. Bucketing exists
+    // because hundreds of raw daily bars/points became illegible, and zoom
+    // (the original mitigation) didn't work reliably on mobile and was
+    // removed — bucketing is the v1.5 replacement strategy.
+    _aagGetChartGranularity() {
+        if (['week', 'fortnight', 'month'].includes(this._aagPeriod)) return 'daily';
+        if (['3m', '6m'].includes(this._aagPeriod)) return 'weekly';
+        return 'monthly'; // 1y
+    }
+
+    // Bucket boundaries covering [start, end]. Weekly buckets are Monday-
+    // start weeks (matching the rest of the app); monthly buckets are
+    // calendar months. Bucket bounds may extend slightly beyond [start,end]
+    // at the edges (a Monday-start week can bleed into the previous month
+    // when a 3mo/6mo range starts mid-week) — callers clip to [start,end]
+    // when aggregating, same treatment as any other partial-period case.
+    _aagBuildBucketBoundaries(start, end, granularity) {
+        const buckets = [];
+        if (granularity === 'weekly') {
+            const mondayOf = (date) => {
+                const dt = new Date(date);
+                const day = dt.getDay();
+                const diff = (day === 0 ? -6 : 1 - day);
+                dt.setDate(dt.getDate() + diff);
+                dt.setHours(0, 0, 0, 0);
+                return dt;
+            };
+            let cur = mondayOf(start);
+            while (cur <= end) {
+                const bucketStart = new Date(cur);
+                const bucketEnd = new Date(cur);
+                bucketEnd.setDate(bucketEnd.getDate() + 6);
+                bucketEnd.setHours(23, 59, 59, 999);
+                buckets.push({ bucketStart, bucketEnd, anchor: new Date(bucketStart) });
+                cur.setDate(cur.getDate() + 7);
+            }
+        } else { // monthly
+            let cur = new Date(start.getFullYear(), start.getMonth(), 1);
+            while (cur <= end) {
+                const bucketStart = new Date(cur.getFullYear(), cur.getMonth(), 1);
+                const bucketEnd = new Date(cur.getFullYear(), cur.getMonth() + 1, 0);
+                bucketEnd.setHours(23, 59, 59, 999);
+                buckets.push({ bucketStart, bucketEnd, anchor: new Date(bucketStart) });
+                cur.setMonth(cur.getMonth() + 1);
+            }
+        }
+        return buckets;
+    }
+
+    // Bucketed Smoked totals — Craved is deliberately not bucketed
+    // alongside it; it disappears entirely at these granularities rather
+    // than compressing into a shape that would compete with the bars.
+    // A bucket sums only real days (future/pre-history/skipped excluded,
+    // same gap philosophy as the daily series); zero real days -> null gap,
+    // real days with zero smoking -> 0, plotted normally.
+    _aagBuildBucketedSmokingSeries(start, end, granularity) {
+        const byDate = {};
+        this.entries.forEach(e => { byDate[e.date] = e; });
+        const todayDt = this._toDate(this._today());
+        const firstEntryDate = this._getFirstEntryDate();
+
+        const buckets = this._aagBuildBucketBoundaries(start, end, granularity);
+        const labels = [];
+        const smoked = [];
+        const bucketMeta = [];
+
+        buckets.forEach(b => {
+            const clippedStart = b.bucketStart < start ? start : b.bucketStart;
+            const clippedEnd = b.bucketEnd > end ? end : b.bucketEnd;
+
+            let realDays = 0;
+            let smokedSum = 0;
+            const cur = new Date(clippedStart);
+            while (cur <= clippedEnd) {
+                const dd = String(cur.getDate()).padStart(2, '0');
+                const mm = String(cur.getMonth() + 1).padStart(2, '0');
+                const yy = String(cur.getFullYear() - 2000).padStart(2, '0');
+                const dateStr = `${dd}-${mm}-${yy}`;
+                const isFuture = cur > todayDt;
+                const isBeforeFirst = !firstEntryDate || cur < firstEntryDate;
+                const entry = byDate[dateStr];
+                const isSkipped = entry && entry.skipped && !entry.clean &&
+                                  !entry.cravings.length && !entry.smoked.length;
+                if (!isFuture && !isBeforeFirst && !isSkipped) {
+                    realDays++;
+                    smokedSum += entry ? entry.smoked.reduce((s, x) => s + x.count, 0) : 0;
+                }
+                cur.setDate(cur.getDate() + 1);
+            }
+
+            labels.push(granularity === 'weekly'
+                ? b.bucketStart.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+                : b.bucketStart.toLocaleDateString('en-GB', { month: 'short' }));
+            smoked.push(realDays === 0 ? null : smokedSum);
+            bucketMeta.push({ anchor: b.anchor });
+        });
+
+        return { labels, smoked, bucketMeta };
+    }
+
+    // Bucketed Resistance Rate — same sum-then-divide-once aggregate math
+    // as the hero number, applied per bucket rather than once for the
+    // whole period. A bucket is a gap if it has zero qualifying cravings,
+    // or if smoked exceeds cravings (untrustworthy denominator) — same
+    // rule as the per-day series, just aggregated across the bucket.
+    _aagBuildBucketedResistanceSeries(start, end, granularity) {
+        const sourceTypes = this._aagGetResistanceSourceTypes();
+        const byDate = {};
+        this.entries.forEach(e => { byDate[e.date] = e; });
+        const todayDt = this._toDate(this._today());
+        const firstEntryDate = this._getFirstEntryDate();
+
+        const buckets = this._aagBuildBucketBoundaries(start, end, granularity);
+        const labels = [];
+        const rates = [];
+        const bucketMeta = [];
+
+        buckets.forEach(b => {
+            const clippedStart = b.bucketStart < start ? start : b.bucketStart;
+            const clippedEnd = b.bucketEnd > end ? end : b.bucketEnd;
+
+            let cravingCount = 0;
+            let smokedCount = 0;
+            const cur = new Date(clippedStart);
+            while (cur <= clippedEnd) {
+                const dd = String(cur.getDate()).padStart(2, '0');
+                const mm = String(cur.getMonth() + 1).padStart(2, '0');
+                const yy = String(cur.getFullYear() - 2000).padStart(2, '0');
+                const dateStr = `${dd}-${mm}-${yy}`;
+                const isFuture = cur > todayDt;
+                const isBeforeFirst = !firstEntryDate || cur < firstEntryDate;
+                const entry = byDate[dateStr];
+                if (!isFuture && !isBeforeFirst) {
+                    cravingCount += entry
+                        ? entry.cravings.filter(c => sourceTypes.includes(c.source || 'manual')).length
+                        : 0;
+                    smokedCount += entry ? entry.smoked.reduce((s, x) => s + x.count, 0) : 0;
+                }
+                cur.setDate(cur.getDate() + 1);
+            }
+
+            labels.push(granularity === 'weekly'
+                ? b.bucketStart.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+                : b.bucketStart.toLocaleDateString('en-GB', { month: 'short' }));
+
+            if (cravingCount === 0 || smokedCount > cravingCount) {
+                rates.push(null);
+            } else {
+                rates.push(Math.round(((cravingCount - smokedCount) / cravingCount) * 100));
+            }
+            bucketMeta.push({ anchor: b.anchor });
+        });
+
+        return { labels, rates, bucketMeta };
+    }
+
+    // Tapping a bucket bar jumps the whole page (all cards share one period
+    // state) to that bucket's own week or month — recovering the daily
+    // detail the bucket compressed away. Capped at one level: the
+    // destination is always daily granularity with nothing further
+    // compressed beneath it, so there's nothing left to drill into again.
+    _aagDrillInto(anchorDate, granularity) {
+        this._aagDrillBack = { period: this._aagPeriod, anchorDate: new Date(this._aagAnchorDate) };
+        this._aagPeriod = granularity === 'weekly' ? 'week' : 'month';
+        this._aagAnchorDate = anchorDate;
+
+        document.querySelectorAll('.aag-period-chip').forEach(c =>
+            c.classList.toggle('selected', c.dataset.period === this._aagPeriod));
+
+        this._renderAtAGlance();
+    }
+
+    _aagDrillBackOut() {
+        if (!this._aagDrillBack) return;
+        this._aagPeriod = this._aagDrillBack.period;
+        this._aagAnchorDate = this._aagDrillBack.anchorDate;
+        this._aagDrillBack = null;
+
+        document.querySelectorAll('.aag-period-chip').forEach(c =>
+            c.classList.toggle('selected', c.dataset.period === this._aagPeriod));
+
+        this._renderAtAGlance();
+    }
+
     // Sparse axis-label logic shared by every AAG line/bar chart. Given the
     // full labels array (dd-mm-yy strings) and a tick's index, decides what
     // text (if any) that tick shows, scaled by how many points are in view:
@@ -2832,7 +3019,7 @@ class CigLogTracker {
     _aagRenderResistanceCard(start, end, prevStart, prevEnd) {
         const rate = this._aagComputeResistanceAggregate(start, end);
         const prevRate = this._aagComputeResistanceAggregate(prevStart, prevEnd);
-        const hasEnoughData = rate !== null && prevRate !== null;
+        const hasEnoughData = rate !== null && prevRate !== null && this._aagPreviousPeriodIsReliable(prevStart);
 
         const rateDisplay = rate === null ? '—' : `${rate}%`;
         const delta = hasEnoughData ? this._computeDelta(rate, prevRate, false, true) : '';
@@ -2848,24 +3035,37 @@ class CigLogTracker {
                 </div>
             </div>`;
 
-        return this._aagMakeCard('assignment_turned_in', 'Resistance Rate Trend', body);
+        const backArrow = this._aagDrillBack
+            ? `<button class="aag-drill-back-btn" aria-label="Back to previous view"><span class="ms">arrow_back</span></button>`
+            : '';
+
+        return this._aagMakeCard('assignment_turned_in', 'Resistance Rate Trend', body, backArrow);
     }
 
     _aagRenderResistanceChart(start, end) {
         const canvas = document.getElementById('aagResistanceChart');
         if (!canvas) return;
 
-        const { labels, rates } = this._aagBuildResistanceSeries(start, end);
         const st = this._chartStyle();
+        const granularity = this._aagGetChartGranularity();
+        const bucketed = granularity !== 'daily';
 
-        // Bar thickness/spacing tapers as period grows — same degradation
-        // philosophy as Smoking Pattern's dot/line tiers, expressed here as
-        // barPercentage/categoryPercentage instead.
+        let labels, rates, bucketMeta;
+        if (bucketed) {
+            ({ labels, rates, bucketMeta } = this._aagBuildBucketedResistanceSeries(start, end, granularity));
+        } else {
+            ({ labels, rates } = this._aagBuildResistanceSeries(start, end));
+        }
+
         let barPercentage, categoryPercentage;
-        if (labels.length <= 14)      { barPercentage = 0.5; categoryPercentage = 0.6;  }
-        else if (labels.length <= 31) { barPercentage = 0.6; categoryPercentage = 0.7;  }
-        else if (labels.length <= 95) { barPercentage = 0.8; categoryPercentage = 0.85; }
-        else                          { barPercentage = 0.9; categoryPercentage = 0.95; }
+        if (!bucketed) {
+            if (labels.length <= 14) { barPercentage = 0.5; categoryPercentage = 0.6; }
+            else                     { barPercentage = 0.6; categoryPercentage = 0.7; }
+        } else if (granularity === 'weekly') {
+            barPercentage = 0.6; categoryPercentage = 0.7;
+        } else {
+            barPercentage = 0.5; categoryPercentage = 0.6;
+        }
 
         if (this._aagResistanceChart) { this._aagResistanceChart.destroy(); this._aagResistanceChart = null; }
 
@@ -2877,8 +3077,8 @@ class CigLogTracker {
                     label: 'Resistance rate',
                     data: rates,
                     backgroundColor: '#C6E0B4',
-                    borderRadius: 50,      // any large number auto-clamps to a full pill, at any bar width
-                    borderSkipped: false,  // rounds both ends, not just the top
+                    borderRadius: 50,
+                    borderSkipped: false,
                     barPercentage,
                     categoryPercentage,
                 }],
@@ -2887,6 +3087,26 @@ class CigLogTracker {
                 responsive: true,
                 maintainAspectRatio: false,
                 layout: { padding: { bottom: 4 } },
+                onClick: bucketed ? (evt, elements) => {
+                    if (!elements.length) return;
+                    const index = elements[0].index;
+                    const pending = this._aagResistancePendingTap;
+
+                    if (pending && pending.index === index) {
+                        clearTimeout(pending.timer);
+                        this._aagResistancePendingTap = null;
+                        this._aagDrillInto(bucketMeta[index].anchor, granularity);
+                    } else {
+                        if (pending) clearTimeout(pending.timer);
+                        this._aagResistancePendingTap = {
+                            index,
+                            timer: setTimeout(() => { this._aagResistancePendingTap = null; }, 3000),
+                        };
+                    }
+                } : undefined,
+                onHover: bucketed ? (evt, elements) => {
+                    evt.native.target.style.cursor = elements.length ? 'pointer' : 'default';
+                } : undefined,
                 plugins: {
                     legend: { display: false },
                     tooltip: {
@@ -2900,24 +3120,18 @@ class CigLogTracker {
                             label: (ctx) => `${ctx.parsed.y}% resisted`,
                         },
                     },
-                    zoom: {
-                        pan: {
-                            enabled: false
-                        },
-                        zoom: {
-                            wheel: { enabled: true },
-                            pinch: { enabled: false }
-                        },
-                        drag: {
-                            enabled: false
-                        }
-                    },
                 },
                 scales: {
                     x: {
                         grid: { display: false },
                         border: { display: false },
-                        ticks: {
+                        ticks: bucketed ? {
+                            autoSkip: true,
+                            maxTicksLimit: granularity === 'weekly' ? 8 : 12,
+                            maxRotation: 0,
+                            font: { family: st.font, size: 10 },
+                            color: st.textSecond,
+                        } : {
                             autoSkip: false,
                             maxRotation: 0,
                             font: { family: st.font, size: 10 },
@@ -2942,7 +3156,6 @@ class CigLogTracker {
                 animation: { duration: 400, easing: 'easeOutQuart' },
             },
         });
-        this._aagEnablePinchZoom(this._aagResistanceChart, canvas.parentElement);
     }
 
     _aagRenderSmokingPatternCard(start, end, prevStart, prevEnd) {
@@ -2950,7 +3163,7 @@ class CigLogTracker {
         const prevEntries = this._aagGetEntriesInBounds(prevStart, prevEnd);
         const { smoked, craved } = this._aagComputeTotals(entries);
         const { smoked: prevSmoked, craved: prevCraved } = this._aagComputeTotals(prevEntries);
-        const hasEnoughData = prevEntries.length > 0;
+        const hasEnoughData = this._aagPreviousPeriodIsReliable(prevStart);
 
         const body = `
             <div class="aag-chart-container">
@@ -2967,70 +3180,101 @@ class CigLogTracker {
                 </div>
             </div>`;
 
-        return this._aagMakeCard('assignment_late', 'Smoking Pattern', body);
+        const backArrow = this._aagDrillBack
+            ? `<button class="aag-drill-back-btn" aria-label="Back to previous view"><span class="ms">arrow_back</span></button>`
+            : '';
+
+        return this._aagMakeCard('assignment_late', 'Smoking Pattern', body, backArrow);
     }
 
     _aagRenderSmokingPatternChart(start, end) {
         const canvas = document.getElementById('aagSmokingPatternChart');
         if (!canvas) return;
 
-        const { labels, smoked, craved } = this._aagBuildDailySeries(start, end);
         const st = this._chartStyle();
+        const granularity = this._aagGetChartGranularity();
+        const bucketed = granularity !== 'daily';
 
-        // Craved (line) keeps its own degradation tiers — dots stay on as a
-        // reference point against the x-axis labels at low density, but the
-        // line itself recedes faster than before now that Smoked is bars and
-        // Craved is meant to read as quiet supporting context, not a peer.
-        let cravedDotRadius, cravedLineWidth;
-        if (labels.length <= 14)      { cravedDotRadius = 3;   cravedLineWidth = 1.5; }
-        else if (labels.length <= 31) { cravedDotRadius = 2;   cravedLineWidth = 1.5; }
-        else if (labels.length <= 95) { cravedDotRadius = 0.8; cravedLineWidth = 1.5; }
-        else                          { cravedDotRadius = 0;   cravedLineWidth = 1;   }
+        let labels, smoked, craved, bucketMeta;
+        if (bucketed) {
+            ({ labels, smoked, bucketMeta } = this._aagBuildBucketedSmokingSeries(start, end, granularity));
+        } else {
+            ({ labels, smoked, craved } = this._aagBuildDailySeries(start, end));
+        }
 
-        // Bar thickness/spacing tapers as period grows — same tiers already
-        // proven on Resistance Rate Trend.
         let barPercentage, categoryPercentage;
-        if (labels.length <= 14)      { barPercentage = 0.5; categoryPercentage = 0.6;  }
-        else if (labels.length <= 31) { barPercentage = 0.6; categoryPercentage = 0.7;  }
-        else if (labels.length <= 95) { barPercentage = 0.8; categoryPercentage = 0.85; }
-        else                          { barPercentage = 0.9; categoryPercentage = 0.95; }
+        if (!bucketed) {
+            if (labels.length <= 14) { barPercentage = 0.5; categoryPercentage = 0.6; }
+            else                     { barPercentage = 0.6; categoryPercentage = 0.7; }
+        } else if (granularity === 'weekly') {
+            barPercentage = 0.6; categoryPercentage = 0.7; // ~13-26 bars, same density as daily-month tier
+        } else {
+            barPercentage = 0.5; categoryPercentage = 0.6; // ~12 bars, same density as daily-week/fortnight tier
+        }
+
+        const datasets = [{
+            type: 'bar',
+            label: 'Smoked',
+            data: smoked,
+            backgroundColor: '#f1976d',
+            borderRadius: 50,
+            borderSkipped: false,
+            barPercentage,
+            categoryPercentage,
+            order: 2,
+        }];
+
+        // Craved only exists at daily granularity — it disappears entirely
+        // once bars are bucketed, rather than compressing into a shape
+        // that would compete with them (spec decision, v1.5).
+        if (!bucketed) {
+            datasets.push({
+                type: 'line',
+                label: 'Craved',
+                data: craved,
+                borderColor: 'rgba(217,217,217,0.3)',
+                backgroundColor: 'transparent',
+                pointRadius: 0,
+                pointHoverRadius: 5,
+                pointBackgroundColor: 'rgba(217,217,217,0.5)',
+                borderWidth: 1.5,
+                tension: 0.1,
+                fill: false,
+                order: 1,
+            });
+        }
 
         if (this._aagSmokingChart) { this._aagSmokingChart.destroy(); this._aagSmokingChart = null; }
 
         this._aagSmokingChart = new Chart(canvas.getContext('2d'), {
-            data: {
-                labels,
-                datasets: [
-                    {
-                        type: 'bar',
-                        label: 'Smoked',
-                        data: smoked,
-                        backgroundColor: '#f1976d',
-                        borderRadius: 50,
-                        borderSkipped: false,
-                        barPercentage,
-                        categoryPercentage,
-                        order: 2, // drawn first — sits behind the line
-                    },
-                    {
-                        type: 'line',
-                        label: 'Craved',
-                        data: craved,
-                        borderColor: 'rgba(217,217,217,0.3)',
-                        backgroundColor: 'transparent',
-                        pointRadius: cravedDotRadius,
-                        pointHoverRadius: 5,
-                        pointBackgroundColor: 'rgba(217,217,217,0.5)',
-                        borderWidth: cravedLineWidth,
-                        tension: 0,
-                        fill: false,
-                        order: 1, // drawn last — sits in front of the bars
-                    },
-                ],
-            },
+            data: { labels, datasets },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                onClick: bucketed ? (evt, elements) => {
+                    if (!elements.length) return;
+                    const index = elements[0].index;
+                    const pending = this._aagSmokingPendingTap;
+
+                    if (pending && pending.index === index) {
+                        // Second tap on the same bar — confirm the drill-down.
+                        clearTimeout(pending.timer);
+                        this._aagSmokingPendingTap = null;
+                        this._aagDrillInto(bucketMeta[index].anchor, granularity);
+                    } else {
+                        // First tap (or a tap on a different bar) — just let the
+                        // default tooltip show. Arm a short window for a
+                        // confirming second tap on this same bar.
+                        if (pending) clearTimeout(pending.timer);
+                        this._aagSmokingPendingTap = {
+                            index,
+                            timer: setTimeout(() => { this._aagSmokingPendingTap = null; }, 3000),
+                        };
+                    }
+                } : undefined,
+                onHover: bucketed ? (evt, elements) => {
+                    evt.native.target.style.cursor = elements.length ? 'pointer' : 'default';
+                } : undefined,
                 plugins: {
                     legend: { display: false },
                     tooltip: {
@@ -3041,24 +3285,18 @@ class CigLogTracker {
                         borderWidth: 1,
                         cornerRadius: 6,
                     },
-                    zoom: {
-                        pan: {
-                            enabled: false
-                        },
-                        zoom: {
-                            wheel: { enabled: true },
-                            pinch: { enabled: false }
-                        },
-                        drag: {
-                            enabled: false
-                        }
-                    },
                 },
                 scales: {
                     x: {
                         grid: { display: false },
                         border: { display: false },
-                        ticks: {
+                        ticks: bucketed ? {
+                            autoSkip: true,
+                            maxTicksLimit: granularity === 'weekly' ? 8 : 12,
+                            maxRotation: 0,
+                            font: { family: st.font, size: 10 },
+                            color: st.textSecond,
+                        } : {
                             autoSkip: false,
                             maxRotation: 0,
                             font: { family: st.font, size: 10 },
@@ -3077,7 +3315,6 @@ class CigLogTracker {
                 animation: { duration: 400, easing: 'easeOutQuart' },
             },
         });
-        this._aagEnablePinchZoom(this._aagSmokingChart, canvas.parentElement);
     }
     
     // Counts cravings with a set intensity (inferred cravings have
@@ -3545,45 +3782,6 @@ class CigLogTracker {
             </div>`;
 
         return this._aagMakeCard('timelapse', 'Time of Day', body);
-    }
-
-    _aagEnablePinchZoom(chartInstance, container) {
-        if (!container || typeof Hammer === 'undefined') return;
-
-        const hammer = new Hammer(container);
-        hammer.get('pinch').set({ enable: true });
-        hammer.get('pan').set({ enable: true, direction: Hammer.DIRECTION_HORIZONTAL });
-
-        let lastScale = 1;
-        let lastPanX = 0;
-
-        hammer.on('pinchstart', function(e) {
-            lastScale = chartInstance.getZoomLevel() || 1;
-        });
-
-        hammer.on('pinch', function(e) {
-            const newScale = Math.max(0.5, Math.min(10, lastScale * e.scale));
-            chartInstance.zoom(newScale);
-            chartInstance.update('none');
-        });
-
-        hammer.on('panstart', function(e) {
-            if (!chartInstance.scales.x) return;
-            lastPanX = chartInstance.scales.x.min;
-        });
-
-        hammer.on('pan', function(e) {
-            if (!chartInstance.scales.x) return;
-            const deltaX = e.deltaX;
-            const scale = chartInstance.getZoomLevel() || 1;
-            const visibleRange = chartInstance.scales.x.max - chartInstance.scales.x.min;
-            const panAmount = -(deltaX / container.clientWidth) * visibleRange / scale;
-            chartInstance.pan({ x: panAmount, y: 0 });
-            chartInstance.update('none');
-        });
-
-        // Store hammer instance for cleanup
-        chartInstance._hammer = hammer;
     }
 
     // Extracted from the _delta closure inside _renderAnalytics() so both

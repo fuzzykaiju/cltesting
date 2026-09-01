@@ -10,7 +10,6 @@ const ASSETS = [
   './META-CHANGELOG.html',
   './META-ROADMAP.html',
   'https://cdn.jsdelivr.net/npm/chart.js',
-  'https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js'
 ];
 
 // Install: cache all assets
@@ -20,7 +19,7 @@ self.addEventListener('install', event => {
       return cache.addAll(ASSETS.filter(asset => typeof asset === 'string' && asset.startsWith('./')))
         .then(() => {
           return Promise.allSettled(
-            ['https://cdn.jsdelivr.net/npm/chart.js', 'https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js'].map(url => cache.add(url).catch(() => {}))
+            ['https://cdn.jsdelivr.net/npm/chart.js'].map(url => cache.add(url).catch(() => {}))
           );
         });
     })
