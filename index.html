@@ -18,12 +18,19 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
     <script>
+        // Force touch detection for Chart.js zoom plugin
         if (window.Chart && window.ChartZoom) {
-            // Register with touch support
-            Chart.register(window.ChartZoom);
-            console.log('ChartZoom registered successfully');
-        } else {
-            console.warn('ChartZoom not available');
+            // Override the plugin's touch detection
+            const origZoom = window.ChartZoom;
+            Chart.register({
+            id: 'zoom',
+            beforeInit: function(chart) {
+                // Ensure touch events are captured
+                chart.options.plugins.zoom = chart.options.plugins.zoom || {};
+                chart.options.plugins.zoom.pinch = { enabled: true };
+                chart.options.plugins.zoom.pan = { enabled: true, mode: 'x' };
+            }
+            });
         }
     </script>
 </head>

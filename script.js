@@ -2867,6 +2867,16 @@ class CigLogTracker {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                // Add to chart options
+                onClick: function(e) {
+                    console.log('Chart clicked', e);
+                },
+                onHover: function(e) {
+                    // touch detection
+                    if (e.event && e.event.type === 'touchstart') {
+                        console.log('Touch detected on chart');
+                    }
+                },
                 layout: { padding: { bottom: 4 } },
                 plugins: {
                     legend: { display: false },
@@ -2891,6 +2901,7 @@ class CigLogTracker {
                             wheel: {
                                 enabled: true,
                                 speed: 0.1,
+                                modifierKey: 'ctrl',
                             },
                             pinch: {
                                 enabled: true,
@@ -2898,8 +2909,9 @@ class CigLogTracker {
                             },
                             mode: 'x',
                         },
-                        limits: {
-                            x: { minRange: 2 },
+                        drag: {
+                            enabled: true,
+                            threshold: 10,
                         },
                     }
                 },
@@ -3020,6 +3032,16 @@ class CigLogTracker {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                // Add to chart options
+                onClick: function(e) {
+                    console.log('Chart clicked', e);
+                },
+                onHover: function(e) {
+                    // touch detection
+                    if (e.event && e.event.type === 'touchstart') {
+                        console.log('Touch detected on chart');
+                    }
+                },
                 plugins: {
                     legend: { display: false },
                     tooltip: {
@@ -3040,6 +3062,7 @@ class CigLogTracker {
                             wheel: {
                                 enabled: true,
                                 speed: 0.1,
+                                modifierKey: 'ctrl',
                             },
                             pinch: {
                                 enabled: true,
@@ -3047,8 +3070,9 @@ class CigLogTracker {
                             },
                             mode: 'x',
                         },
-                        limits: {
-                            x: { minRange: 2 },
+                        drag: {
+                            enabled: true,
+                            threshold: 10,
                         },
                     }
                 },
