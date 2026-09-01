@@ -2882,9 +2882,22 @@ class CigLogTracker {
                         },
                     },
                     zoom: {
-                        pan: { enabled: true, mode: 'x' },
-                        zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' },
-                    },
+                        pan: {
+                            enabled: true,
+                            mode: 'x',
+                            threshold: 5,            // prevents accidental pans
+                        },
+                        zoom: {
+                            wheel: { enabled: true },
+                            pinch: { enabled: true, threshold: 0.5 }, // lower = more responsive
+                            mode: 'x',
+                            threshold: 5,
+                        },
+                        drag: {
+                            enabled: true,           // enables one‑finger pan (also helps touch)
+                            threshold: 10,
+                        },
+                    }
                 },
                 scales: {
                     x: {
@@ -3014,13 +3027,22 @@ class CigLogTracker {
                         cornerRadius: 6,
                     },
                     zoom: {
-                        pan: { enabled: true, mode: 'x' },
+                        pan: {
+                            enabled: true,
+                            mode: 'x',
+                            threshold: 5,            // prevents accidental pans
+                        },
                         zoom: {
                             wheel: { enabled: true },
-                            pinch: { enabled: true },
+                            pinch: { enabled: true, threshold: 0.5 }, // lower = more responsive
                             mode: 'x',
+                            threshold: 5,
                         },
-                    },
+                        drag: {
+                            enabled: true,           // enables one‑finger pan (also helps touch)
+                            threshold: 10,
+                        },
+                    }
                 },
                 scales: {
                     x: {

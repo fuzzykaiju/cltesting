@@ -2678,10 +2678,12 @@ body.aag-active .fixed-header {
     position: relative;
     height: 195px;
     margin-bottom: 4px;
+    touch-action: pan-y;
+    overflow: hidden;
 }
 
 .aag-chart-container canvas {
-    touch-action: pan-y;
+    touch-action: none;
 }
 
 .aag-stat-row {
