@@ -3087,6 +3087,7 @@ class CigLogTracker {
                 responsive: true,
                 maintainAspectRatio: false,
                 layout: { padding: { bottom: 4 } },
+                interaction: { mode: 'index', intersect: false },
                 onClick: bucketed ? (evt, elements) => {
                     if (!elements.length) return;
                     const index = elements[0].index;
@@ -3251,6 +3252,7 @@ class CigLogTracker {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
                 onClick: bucketed ? (evt, elements) => {
                     if (!elements.length) return;
                     const index = elements[0].index;
