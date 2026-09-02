@@ -2680,6 +2680,11 @@ body.aag-active .fixed-header {
     margin-bottom: 4px;
 }
 
+
+.aag-chart-container canvas {
+    -webkit-tap-highlight-color: transparent;
+}
+
 .aag-stat-row {
     display: flex;
     gap: 24px;
@@ -2712,6 +2717,10 @@ body.aag-active .fixed-header {
     position: relative;
     height: 200px;
     margin-bottom: 4px;
+}
+
+.aag-donut-container canvas {
+    -webkit-tap-highlight-color: transparent;
 }
 
 .aag-intensity-breakdown {
